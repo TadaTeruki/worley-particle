@@ -1,23 +1,27 @@
+use nonlinear_chunk::NLGridId;
+
 fn main() {
     let (min_x, max_x) = (-1.0, 1.0);
     let (min_y, max_y) = (-1.0, 1.0);
-    let image_width = 800;
-    let image_height = 800;
+    let image_width = 500;
+    let image_height = 500;
 
     let mut image_buf = image::RgbImage::new(image_width, image_height);
 
+    let scale = 2.0;
+
     for iy in 0..image_height {
         for ix in 0..image_width {
-            let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64;
-            let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64;
+            let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64 * scale;
+            let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64 * scale;
 
-            let color = if x * x + y * y < 1.0 {
-                image::Rgb([0, 0, 0])
-            } else {
-                image::Rgb([255, 255, 255])
-            };
+            let nlgrid_id = NLGridId::from(x + 4.0, y, 1.0);
+            let hash = nlgrid_id.hash();
+            let r = (hash % 256) as u8;
+            let g = (hash / 256 % 256) as u8;
+            let b = (hash / 65536 % 256) as u8;
 
-            image_buf.put_pixel(ix, iy, color);
+            image_buf.put_pixel(ix, iy, image::Rgb([r, g, b]));
         }
     }
 
