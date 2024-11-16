@@ -20,6 +20,31 @@ impl GridId {
             Self(x - 1, y),
         ]
     }
+    fn get_around_wide(&self) -> [Self; 20] {
+        let (x, y) = (self.0, self.1);
+        [
+            Self(x - 1, y - 2),
+            Self(x, y - 2),
+            Self(x + 1, y - 2),
+            Self(x - 2, y - 1),
+            Self(x - 1, y - 1),
+            Self(x, y - 1),
+            Self(x + 1, y - 1),
+            Self(x + 2, y - 1),
+            Self(x - 2, y),
+            Self(x - 1, y),
+            Self(x + 1, y),
+            Self(x + 2, y),
+            Self(x - 2, y + 1),
+            Self(x - 1, y + 1),
+            Self(x, y + 1),
+            Self(x + 1, y + 1),
+            Self(x + 2, y + 1),
+            Self(x - 1, y + 2),
+            Self(x, y + 2),
+            Self(x + 1, y + 2),
+        ]
+    }
 }
 
 /// Non-Linear Grid ID.
@@ -60,52 +85,85 @@ impl NLGridId {
     pub fn get_cell(&self) -> Vec<(f64, f64)> {
         let site = self.site();
         let lid = GridId::from(self.0 as f64, self.1 as f64);
-        let around_lids = lid.get_around();
 
-        let mut around_sites = [(0.0, 0.0); 8];
-        for i in 0..around_lids.len() {
-            around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
-        }
+        // little bit complicated logic for large deformation
+        let wide = self.2 > 0.5;
 
-        let mut centers = [(0.0, 0.0); 8];
-        for i in 0..around_lids.len() {
-            let ia = (i + 1) % around_lids.len();
-            centers[i] = circumcenter(&[&around_sites[i], &around_sites[ia], &site]);
-        }
+        let mut around_sites = if wide {
+            let around_lids = lid.get_around_wide();
+            
+            let mut around_sites = vec![(0.0, 0.0); 20];
+            for i in 0..around_lids.len() {
+                around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
+            }
+            // sort by its phase
+            around_sites.sort_by(|a, b| {
+                let a_phase = (a.0 - site.0).atan2(a.1 - site.1);
+                let b_phase = (b.0 - site.0).atan2(b.1 - site.1);
+                a_phase.total_cmp(&b_phase)
+            });
 
-        let mut applied = [false; 8];
-        for i in 0..around_lids.len() {
-            let ib = (i + around_lids.len() - 1) % around_lids.len();
-            let ia = (i + 1) % around_lids.len();
+            around_sites
+        } else {
+            let around_lids = lid.get_around();
+            
+            let mut around_sites = vec![(0.0, 0.0); 8];
+            for i in 0..around_lids.len() {
+                around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
+            }
+            around_sites
+        };
 
-            let center_a = centers[i];
-            let radius_a = square_distance(&center_a, &around_sites[i]);
-            if square_distance(&center_a, &around_sites[ib]) < radius_a {
-                continue;
+
+        for _ in 0..65536 {
+            let mut centers = vec![(0.0, 0.0); around_sites.len()]; 
+            for i in 0..around_sites.len() {
+                let ia = (i + 1) % around_sites.len();
+                centers[i] = circumcenter(&[&around_sites[i], &around_sites[ia], &site]);
             }
 
-            let center_b = centers[ib];
-            let radius_b = square_distance(&center_b, &around_sites[i]);
-            if square_distance(&center_b, &around_sites[ia]) < radius_b {
-                continue;
+            let mut applied = vec![false; around_sites.len()];
+            for i in 0..around_sites.len() {
+                let ib = (i + around_sites.len() - 1) % around_sites.len();
+                let ia = (i + 1) % around_sites.len();
+
+                let center_a = centers[i];
+                let radius_a = square_distance(&center_a, &around_sites[i]);
+                if square_distance(&center_a, &around_sites[ib]) < radius_a {
+                    continue;
+                }
+
+                let center_b = centers[ib];
+                let radius_b = square_distance(&center_b, &around_sites[i]);
+                if square_distance(&center_b, &around_sites[ia]) < radius_b {
+                    continue;
+                }
+
+                applied[i] = true;
             }
 
-            applied[i] = true;
-        }
+            around_sites = around_sites
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| applied[*i])
+                .map(|(_, &x)| x)
+                .collect::<Vec<(f64, f64)>>();
 
-        let applied_sites = around_sites
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| applied[*i])
-            .map(|(_, &x)| x)
-            .collect::<Vec<(f64, f64)>>();
+            if applied.iter().all(|&x| x) {
+                break;
+            }
+
+            if !wide {
+                break;
+            }
+        }
 
         let mut centers = Vec::new();
 
-        for i in 0..applied_sites.len() {
+        for i in 0..around_sites.len() {
             let center = circumcenter(&[
-                &applied_sites[i],
-                &applied_sites[(i + 1) % applied_sites.len()],
+                &around_sites[i],
+                &around_sites[(i + 1) % around_sites.len()],
                 &site,
             ]);
             centers.push(center);
@@ -144,7 +202,7 @@ fn xorshift64(x: u64) -> u64 {
 }
 
 fn hash_2d(x: u64, y: u64) -> u64 {
-    let mut hash = x;
+    let mut hash = x.wrapping_mul(y+17320508);
     hash = xorshift64(hash);
     hash = hash.wrapping_add(y);
     hash = xorshift64(hash);
