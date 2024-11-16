@@ -1,4 +1,5 @@
 /// Linear Grid ID.
+#[derive(Debug)]
 struct GridId(i64, i64);
 
 impl GridId {
@@ -12,17 +13,18 @@ impl GridId {
             Self(x - 1, y - 1),
             Self(x, y - 1),
             Self(x + 1, y - 1),
-            Self(x - 1, y),
             Self(x + 1, y),
-            Self(x - 1, y + 1),
-            Self(x, y + 1),
             Self(x + 1, y + 1),
+            Self(x, y + 1),
+            Self(x - 1, y + 1),
+            Self(x - 1, y),
         ]
     }
 }
 
 /// Non-Linear Grid ID.
-/// x, y, and the degree of deformation (in \[0.0,1.0\]);
+/// x, y, and the degree of deformation (in \[0.0,1.0\]).
+#[derive(Debug)]
 pub struct NLGridId(i64, i64, f64);
 
 impl NLGridId {
@@ -31,12 +33,12 @@ impl NLGridId {
         let around_lids = lid.get_around();
 
         let mut best_nlid = Self(lid.0, lid.1, deformation);
-        let anchor = best_nlid.anchor_point();
-        let mut best_sqdist = (anchor.0 as f64 - x).powi(2) + (anchor.1 as f64 - y).powi(2);
+        let site = best_nlid.site();
+        let mut best_sqdist = square_distance(&(x, y), &site);
         for around_lid in around_lids {
             let around_nlid = Self(around_lid.0, around_lid.1, deformation);
-            let anchor = around_nlid.anchor_point();
-            let sqdist = (anchor.0 as f64 - x).powi(2) + (anchor.1 as f64 - y).powi(2);
+            let site = around_nlid.site();
+            let sqdist = square_distance(&(x, y), &site);
             if sqdist < best_sqdist {
                 best_nlid = around_nlid;
                 best_sqdist = sqdist;
@@ -49,10 +51,88 @@ impl NLGridId {
         hash_2d(self.0 as u64, self.1 as u64)
     }
 
-    pub fn anchor_point(&self) -> (f64, f64) {
-        let rel_core = anchor_point_from_hash(self.hash(), self.2);
+    pub fn site(&self) -> (f64, f64) {
+        let rel_core = site_point_from_hash(self.hash(), self.2);
         (self.0 as f64 + rel_core.0, self.1 as f64 + rel_core.1)
     }
+
+    /// Get the voronoi cell.
+    pub fn get_cell(&self) -> Vec<(f64, f64)> {
+        let site = self.site();
+        let lid = GridId::from(self.0 as f64, self.1 as f64);
+        let around_lids = lid.get_around();
+
+        let mut around_sites = [(0.0, 0.0); 8];
+        for i in 0..around_lids.len() {
+            around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
+        }
+
+        let mut centers = [(0.0, 0.0); 8];
+        for i in 0..around_lids.len() {
+            let ia = (i + 1) % around_lids.len();
+            centers[i] = circumcenter(&[&around_sites[i], &around_sites[ia], &site]);
+        }
+
+        let mut applied = [false; 8];
+        for i in 0..around_lids.len() {
+            let ib = (i + around_lids.len() - 1) % around_lids.len();
+            let ia = (i + 1) % around_lids.len();
+
+            let center_a = centers[i];
+            let radius_a = square_distance(&center_a, &around_sites[i]);
+            if square_distance(&center_a, &around_sites[ib]) < radius_a {
+                continue;
+            }
+
+            let center_b = centers[ib];
+            let radius_b = square_distance(&center_b, &around_sites[i]);
+            if square_distance(&center_b, &around_sites[ia]) < radius_b {
+                continue;
+            }
+
+            applied[i] = true;
+        }
+
+        let applied_sites = around_sites
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| applied[*i])
+            .map(|(_, &x)| x)
+            .collect::<Vec<(f64, f64)>>();
+
+        let mut centers = Vec::new();
+
+        for i in 0..applied_sites.len() {
+            let center = circumcenter(&[
+                &applied_sites[i],
+                &applied_sites[(i + 1) % applied_sites.len()],
+                &site,
+            ]);
+            centers.push(center);
+        }
+        centers
+    }
+}
+
+fn square_distance(p1: &(f64, f64), p2: &(f64, f64)) -> f64 {
+    (p1.0 - p2.0).powi(2) + (p1.1 - p2.1).powi(2)
+}
+
+fn circumcenter(triangle: &[&(f64, f64); 3]) -> (f64, f64) {
+    let p1 = triangle[0];
+    let p2 = triangle[1];
+    let p3 = triangle[2];
+    let d = 2.0 * (p1.0 * (p2.1 - p3.1) + p2.0 * (p3.1 - p1.1) + p3.0 * (p1.1 - p2.1));
+    let ux = ((p1.0 * p1.0 + p1.1 * p1.1) * (p2.1 - p3.1)
+        + (p2.0 * p2.0 + p2.1 * p2.1) * (p3.1 - p1.1)
+        + (p3.0 * p3.0 + p3.1 * p3.1) * (p1.1 - p2.1))
+        / d;
+    let uy = ((p1.0 * p1.0 + p1.1 * p1.1) * (p3.0 - p2.0)
+        + (p2.0 * p2.0 + p2.1 * p2.1) * (p1.0 - p3.0)
+        + (p3.0 * p3.0 + p3.1 * p3.1) * (p2.0 - p1.0))
+        / d;
+
+    (ux, uy)
 }
 
 fn xorshift64(x: u64) -> u64 {
@@ -66,7 +146,7 @@ fn xorshift64(x: u64) -> u64 {
 fn hash_2d(x: u64, y: u64) -> u64 {
     let mut hash = x;
     hash = xorshift64(hash);
-    hash = hash.wrapping_add(y as u64);
+    hash = hash.wrapping_add(y);
     hash = xorshift64(hash);
     hash
 }
@@ -75,7 +155,7 @@ fn mod_f(a: f64, b: f64) -> f64 {
     a - b * (a / b).floor()
 }
 
-fn anchor_point_from_hash(hash: u64, diameter: f64) -> (f64, f64) {
+fn site_point_from_hash(hash: u64, diameter: f64) -> (f64, f64) {
     let hash01 = mod_f(hash as f64 / u16::MAX as f64, 1.0);
     let theta = hash01 * 2.0 * std::f64::consts::PI;
     let radius = diameter / 2.0;
@@ -93,7 +173,7 @@ mod test {
         let mut ysum = 0.0;
         for iy in 0..n {
             for ix in 0..n {
-                let point = anchor_point_from_hash(hash_2d(ix, iy), 1.0);
+                let point = site_point_from_hash(hash_2d(ix, iy), 1.0);
                 xsum += point.0;
                 ysum += point.1;
             }

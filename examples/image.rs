@@ -15,7 +15,7 @@ fn main() {
             let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64 * scale;
             let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64 * scale;
 
-            let nlgrid_id = NLGridId::from(x + 4.0, y, 1.0);
+            let nlgrid_id = NLGridId::from(x, y, 1.0);
             let hash = nlgrid_id.hash();
             let r = (hash % 256) as u8;
             let g = (hash / 256 % 256) as u8;
