@@ -1,5 +1,5 @@
 /// Linear Grid ID.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct GridId(i64, i64);
 
 impl GridId {
@@ -49,7 +49,7 @@ impl GridId {
 
 /// Non-Linear Grid ID.
 /// x, y, and the degree of deformation (in \[0.0,1.0\]).
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct NLGridId(i64, i64, f64);
 
 impl NLGridId {
