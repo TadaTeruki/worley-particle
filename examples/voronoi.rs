@@ -1,4 +1,4 @@
-use nonlinear_chunk::NLGridId;
+use nonlinear_grid::NLGridId;
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 fn main() {

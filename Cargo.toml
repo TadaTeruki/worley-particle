@@ -1,5 +1,5 @@
 [package]
-name = "nonlinear-chunk"
+name = "nonlinear-grid"
 version = "0.1.0"
 edition = "2021"
 

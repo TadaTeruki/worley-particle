@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use nonlinear_chunk::NLGridId;
+use nonlinear_grid::NLGridId;
 struct FadePolygon {
     points: Vec<(f64, f64)>,
     center: (f64, f64),

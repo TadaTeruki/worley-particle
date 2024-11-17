@@ -1,4 +1,4 @@
-use nonlinear_chunk::NLGridId;
+use nonlinear_grid::NLGridId;
 
 fn main() {
     let (min_x, max_x) = (-1.0, 1.0);
