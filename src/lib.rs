@@ -1,6 +1,10 @@
+use std::hash::Hash;
+
 /// Linear Grid ID.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct GridId(i64, i64);
+
+impl Eq for GridId {}
 
 impl GridId {
     fn from(x: f64, y: f64) -> Self {
@@ -49,8 +53,18 @@ impl GridId {
 
 /// Non-Linear Grid ID.
 /// x, y, and the degree of deformation (in \[0.0,1.0\]).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NLGridId(i64, i64, f64);
+
+impl Hash for NLGridId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+        self.2.to_bits().hash(state);
+    }
+}
+
+impl Eq for NLGridId {}
 
 impl NLGridId {
     pub fn from(x: f64, y: f64, deformation: f64) -> Self {
@@ -91,7 +105,7 @@ impl NLGridId {
 
         let mut around_sites = if wide {
             let around_lids = lid.get_around_wide();
-            
+
             let mut around_sites = vec![(0.0, 0.0); 20];
             for i in 0..around_lids.len() {
                 around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
@@ -106,7 +120,7 @@ impl NLGridId {
             around_sites
         } else {
             let around_lids = lid.get_around();
-            
+
             let mut around_sites = vec![(0.0, 0.0); 8];
             for i in 0..around_lids.len() {
                 around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
@@ -114,9 +128,8 @@ impl NLGridId {
             around_sites
         };
 
-
         for _ in 0..65536 {
-            let mut centers = vec![(0.0, 0.0); around_sites.len()]; 
+            let mut centers = vec![(0.0, 0.0); around_sites.len()];
             for i in 0..around_sites.len() {
                 let ia = (i + 1) % around_sites.len();
                 centers[i] = circumcenter(&[&around_sites[i], &around_sites[ia], &site]);
@@ -202,7 +215,7 @@ fn xorshift64(x: u64) -> u64 {
 }
 
 fn hash_2d(x: u64, y: u64) -> u64 {
-    let mut hash = x.wrapping_mul(y+17320508);
+    let mut hash = x.wrapping_mul(y + 17320508);
     hash = xorshift64(hash);
     hash = hash.wrapping_add(y);
     hash = xorshift64(hash);
