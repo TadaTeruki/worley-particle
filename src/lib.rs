@@ -72,6 +72,10 @@ pub struct NLGridVoronoiCell {
 }
 
 impl NLGridId {
+    pub fn new(x: i64, y: i64, deformation: f64) -> Self {
+        Self(x, y, deformation)
+    }
+
     pub fn from(x: f64, y: f64, deformation: f64) -> Self {
         let lid = GridId::from(x, y);
         let around_lids = lid.get_around();
@@ -98,6 +102,22 @@ impl NLGridId {
     pub fn site(&self) -> (f64, f64) {
         let rel_core = site_point_from_hash(hash_2d(self.0, self.1), self.2);
         (self.0 as f64 + rel_core.0, self.1 as f64 + rel_core.1)
+    }
+
+    pub fn query_surroundings(x: f64, y: f64, deformation: f64, radius: f64) -> Vec<Self> {
+        let lid = GridId::from(x, y);
+        let rad_ceil = radius.ceil() as i64;
+        let mut surroundings = Vec::new();
+
+        for dy in -rad_ceil..=rad_ceil {
+            for dx in -rad_ceil..=rad_ceil {
+                let nlid = Self(lid.0 + dx, lid.1 + dy, deformation);
+                if square_distance(&(x, y), &nlid.site()) < radius.powi(2) {
+                    surroundings.push(nlid);
+                }
+            }
+        }
+        surroundings
     }
 
     /// Get the voronoi cell.
@@ -246,6 +266,8 @@ fn site_point_from_hash(hash: u64, diameter: f64) -> (f64, f64) {
 
 #[cfg(test)]
 mod test {
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
     use super::*;
 
     #[test]
@@ -283,5 +305,26 @@ mod test {
             let center = circumcenter(&[&a, &b, &c]);
             assert!(square_distance(&center, &voronoi.corners[i]) < 1e-9);
         }
+    }
+
+    #[test]
+    fn test_query_surroundings() {
+        (0..100).for_each(|seed| {
+            let mut rng = StdRng::from_seed([seed; 32]);
+            let point = (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0));
+            let deform = rng.gen_range(0.0..1.0);
+            let radius = rng.gen_range(0.0..100.0);
+            let surroundings = NLGridId::query_surroundings(point.0, point.1, deform, radius);
+            let mut count = 0;
+            for iy in -(radius.ceil() + 1.0) as i64 * 5..=(radius.ceil() + 1.0) as i64 * 5 {
+                for ix in -(radius.ceil() + 1.0) as i64 * 5..=(radius.ceil() + 1.0) as i64 * 5 {
+                    let nlid = NLGridId::new(point.0 as i64 + ix, point.1 as i64 + iy, deform);
+                    if square_distance(&point, &nlid.site()) < radius.powi(2) {
+                        count += 1;
+                    }
+                }
+            }
+            assert_eq!(surroundings.len(), count);
+        });
     }
 }
