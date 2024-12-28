@@ -99,23 +99,6 @@ impl NLGridId {
         let rel_core = site_point_from_hash(hash_2d(self.0, self.1), self.2);
         (self.0 as f64 + rel_core.0, self.1 as f64 + rel_core.1)
     }
-    /*
-    pub fn get_surroundings(&self, radius: f64) -> Vec<Self> {
-        let (cx, cy) = (self.0, self.1);
-        let rad_ceil = radius.ceil() as i64;
-        let mut surroundings = Vec::new();
-        for dy in -rad_ceil..=rad_ceil {
-            for dx in -rad_ceil..=rad_ceil {
-                let nlid = Self(cx + dx, cy + dy, self.2);
-                let site = nlid.site();
-                if square_distance(&(cx as f64, cy as f64), &site) < radius.powi(2) {
-                    surroundings.push(nlid);
-                }
-            }
-        }
-        surroundings
-    }
-    */
 
     /// Get the voronoi cell.
     pub fn calculate_voronoi(&self) -> NLGridVoronoiCell {
@@ -301,26 +284,4 @@ mod test {
             assert!(square_distance(&center, &voronoi.corners[i]) < 1e-9);
         }
     }
-
-    // test for get_surroundings
-    // accepted if the number of surroundings is same as if checked all points
-    /*
-    #[test]
-    fn test_get_surroundings() {
-        let deform = 1.0 - 1e-9;
-        let nlid = NLGridId::from(0.0, 0.0, deform);
-        let radius = 17.1;
-        let surroundings = nlid.get_surroundings(radius);
-        let mut count = 0;
-        for iy in -radius as i64 * 5..=radius as i64 * 5 {
-            for ix in -radius as i64 * 5..=radius as i64 * 5 {
-                let nlid = NLGridId::from(ix as f64, iy as f64, deform);
-                if square_distance(&(0.0, 0.0), &nlid.site()) < radius.powi(2) {
-                    count += 1;
-                }
-            }
-        }
-        assert_eq!(surroundings.len(), count);
-    }
-    */
 }
