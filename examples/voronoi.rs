@@ -11,7 +11,7 @@ fn main() {
     for iy in 0..n {
         for ix in 0..n {
             let nlgrid_id = NLGridId::from(ix as f64, iy as f64, 0.8);
-            let voronoi = nlgrid_id.get_cell();
+            let voronoi = nlgrid_id.calculate_voronoi().corners;
 
             if voronoi.len() < 3 {
                 continue;

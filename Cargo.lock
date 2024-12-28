@@ -462,6 +462,7 @@ name = "nonlinear-grid"
 version = "0.1.0"
 dependencies = [
  "image",
+ "rand",
  "tiny-skia",
 ]
 

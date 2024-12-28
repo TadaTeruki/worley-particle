@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Linear Grid ID.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,6 +66,11 @@ impl Hash for NLGridId {
 
 impl Eq for NLGridId {}
 
+pub struct NLGridVoronoiCell {
+    pub corners: Vec<(f64, f64)>,
+    pub neighbors: Vec<NLGridId>,
+}
+
 impl NLGridId {
     pub fn from(x: f64, y: f64, deformation: f64) -> Self {
         let lid = GridId::from(x, y);
@@ -87,37 +92,62 @@ impl NLGridId {
     }
 
     pub fn hash(&self) -> u64 {
-        hash_2d(self.0 as u64, self.1 as u64)
+        hash_2d(self.0, self.1)
     }
 
     pub fn site(&self) -> (f64, f64) {
-        let rel_core = site_point_from_hash(self.hash(), self.2);
+        let rel_core = site_point_from_hash(hash_2d(self.0, self.1), self.2);
         (self.0 as f64 + rel_core.0, self.1 as f64 + rel_core.1)
     }
+    /*
+    pub fn get_surroundings(&self, radius: f64) -> Vec<Self> {
+        let (cx, cy) = (self.0, self.1);
+        let rad_ceil = radius.ceil() as i64;
+        let mut surroundings = Vec::new();
+        for dy in -rad_ceil..=rad_ceil {
+            for dx in -rad_ceil..=rad_ceil {
+                let nlid = Self(cx + dx, cy + dy, self.2);
+                let site = nlid.site();
+                if square_distance(&(cx as f64, cy as f64), &site) < radius.powi(2) {
+                    surroundings.push(nlid);
+                }
+            }
+        }
+        surroundings
+    }
+    */
 
     /// Get the voronoi cell.
-    pub fn get_cell(&self) -> Vec<(f64, f64)> {
+    pub fn calculate_voronoi(&self) -> NLGridVoronoiCell {
         let site = self.site();
         let lid = GridId::from(self.0 as f64, self.1 as f64);
 
         // little bit complicated logic for large deformation
         let wide = self.2 > 0.5;
 
-        let mut around_sites = if wide {
+        let (mut around_sites, mut around_lids) = if wide {
             let around_lids = lid.get_around_wide();
 
-            let mut around_sites = vec![(0.0, 0.0); 20];
+            let mut around_sites: Vec<(f64, f64)> = vec![(0.0, 0.0); 20];
             for i in 0..around_lids.len() {
                 around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
             }
+
             // sort by its phase
-            around_sites.sort_by(|a, b| {
-                let a_phase = (a.0 - site.0).atan2(a.1 - site.1);
-                let b_phase = (b.0 - site.0).atan2(b.1 - site.1);
+            let mut idx = (0..around_sites.len()).collect::<Vec<usize>>();
+            idx.sort_by(|a, b| {
+                let a_phase = (around_sites[*a].0 - site.0).atan2(around_sites[*a].1 - site.1);
+                let b_phase = (around_sites[*b].0 - site.0).atan2(around_sites[*b].1 - site.1);
                 a_phase.total_cmp(&b_phase)
             });
 
-            around_sites
+            let around_sites = idx
+                .iter()
+                .map(|&i| around_sites[i])
+                .collect::<Vec<(f64, f64)>>();
+            let around_lids = idx.iter().map(|&i| around_lids[i]).collect::<Vec<GridId>>();
+
+            (around_sites, around_lids)
         } else {
             let around_lids = lid.get_around();
 
@@ -125,7 +155,7 @@ impl NLGridId {
             for i in 0..around_lids.len() {
                 around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
             }
-            around_sites
+            (around_sites, around_lids.to_vec())
         };
 
         for _ in 0..65536 {
@@ -155,12 +185,12 @@ impl NLGridId {
                 applied[i] = true;
             }
 
-            around_sites = around_sites
+            (around_sites, around_lids) = around_sites
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| applied[*i])
-                .map(|(_, &x)| x)
-                .collect::<Vec<(f64, f64)>>();
+                .map(|(i, &x)| (x, around_lids[i]))
+                .unzip();
 
             if applied.iter().all(|&x| x) {
                 break;
@@ -181,7 +211,14 @@ impl NLGridId {
             ]);
             centers.push(center);
         }
-        centers
+
+        NLGridVoronoiCell {
+            corners: centers,
+            neighbors: around_lids
+                .iter()
+                .map(|&x| Self(x.0, x.1, self.2))
+                .collect(),
+        }
     }
 }
 
@@ -206,24 +243,15 @@ fn circumcenter(triangle: &[&(f64, f64); 3]) -> (f64, f64) {
     (ux, uy)
 }
 
-fn xorshift64(x: u64) -> u64 {
-    let mut x = x;
-    x ^= x << 13;
-    x ^= x >> 7;
-    x ^= x << 17;
-    x
-}
-
-fn hash_2d(x: u64, y: u64) -> u64 {
-    let mut hash = x.wrapping_mul(y + 17320508);
-    hash = xorshift64(hash);
-    hash = hash.wrapping_add(y);
-    hash = xorshift64(hash);
-    hash
-}
-
 fn mod_f(a: f64, b: f64) -> f64 {
     a - b * (a / b).floor()
+}
+
+fn hash_2d(x: i64, y: i64) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    x.hash(&mut hasher);
+    y.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn site_point_from_hash(hash: u64, diameter: f64) -> (f64, f64) {
@@ -257,4 +285,42 @@ mod test {
         assert!(yave < 1e-3);
         assert!(r < 1e-3);
     }
+
+    #[test]
+    fn test_calculate_voronoi() {
+        let deform = 1.0 - 1e-9;
+        let nlid = NLGridId::from(0.0, 0.0, deform);
+        let voronoi = nlid.calculate_voronoi();
+        assert_eq!(voronoi.corners.len(), voronoi.neighbors.len());
+
+        for i in 0..voronoi.neighbors.len() {
+            let a = voronoi.neighbors[i].site();
+            let b = voronoi.neighbors[(i + 1) % voronoi.neighbors.len()].site();
+            let c = nlid.site();
+            let center = circumcenter(&[&a, &b, &c]);
+            assert!(square_distance(&center, &voronoi.corners[i]) < 1e-9);
+        }
+    }
+
+    // test for get_surroundings
+    // accepted if the number of surroundings is same as if checked all points
+    /*
+    #[test]
+    fn test_get_surroundings() {
+        let deform = 1.0 - 1e-9;
+        let nlid = NLGridId::from(0.0, 0.0, deform);
+        let radius = 17.1;
+        let surroundings = nlid.get_surroundings(radius);
+        let mut count = 0;
+        for iy in -radius as i64 * 5..=radius as i64 * 5 {
+            for ix in -radius as i64 * 5..=radius as i64 * 5 {
+                let nlid = NLGridId::from(ix as f64, iy as f64, deform);
+                if square_distance(&(0.0, 0.0), &nlid.site()) < radius.powi(2) {
+                    count += 1;
+                }
+            }
+        }
+        assert_eq!(surroundings.len(), count);
+    }
+    */
 }

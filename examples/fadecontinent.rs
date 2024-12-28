@@ -90,7 +90,7 @@ fn main() {
             let fade = if let Some(polygon) = polygon_cache.get(&nlgrid_id) {
                 polygon.fade((x, y))
             } else {
-                let polygon = FadePolygon::new(nlgrid_id.get_cell());
+                let polygon = FadePolygon::new(nlgrid_id.calculate_voronoi().corners);
                 let fade = polygon.fade((x, y));
                 polygon_cache.insert(nlgrid_id, polygon);
                 fade
