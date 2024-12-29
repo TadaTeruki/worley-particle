@@ -1,228 +1,41 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-/// Linear Grid ID.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct GridId(i64, i64);
-
-impl Eq for GridId {}
-
-impl GridId {
-    fn from(x: f64, y: f64) -> Self {
-        Self(x.round() as i64, y.round() as i64)
-    }
-
-    fn get_around(&self) -> [Self; 8] {
-        let (x, y) = (self.0, self.1);
-        [
-            Self(x - 1, y - 1),
-            Self(x, y - 1),
-            Self(x + 1, y - 1),
-            Self(x + 1, y),
-            Self(x + 1, y + 1),
-            Self(x, y + 1),
-            Self(x - 1, y + 1),
-            Self(x - 1, y),
-        ]
-    }
-    fn get_around_wide(&self) -> [Self; 20] {
-        let (x, y) = (self.0, self.1);
-        [
-            Self(x - 1, y - 2),
-            Self(x, y - 2),
-            Self(x + 1, y - 2),
-            Self(x - 2, y - 1),
-            Self(x - 1, y - 1),
-            Self(x, y - 1),
-            Self(x + 1, y - 1),
-            Self(x + 2, y - 1),
-            Self(x - 2, y),
-            Self(x - 1, y),
-            Self(x + 1, y),
-            Self(x + 2, y),
-            Self(x - 2, y + 1),
-            Self(x - 1, y + 1),
-            Self(x, y + 1),
-            Self(x + 1, y + 1),
-            Self(x + 2, y + 1),
-            Self(x - 1, y + 2),
-            Self(x, y + 2),
-            Self(x + 1, y + 2),
-        ]
-    }
+fn get_grids_around(x: i64, y: i64) -> [(i64, i64); 8] {
+    [
+        (x - 1, y - 1),
+        (x, y - 1),
+        (x + 1, y - 1),
+        (x + 1, y),
+        (x + 1, y + 1),
+        (x, y + 1),
+        (x - 1, y + 1),
+        (x - 1, y),
+    ]
 }
 
-/// Non-Linear Grid ID.
-/// x, y, and the degree of deformation (in \[0.0,1.0\]).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NLGridId(i64, i64, f64);
-
-impl Hash for NLGridId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-        self.1.hash(state);
-        self.2.to_bits().hash(state);
-    }
-}
-
-impl Eq for NLGridId {}
-
-pub struct NLGridVoronoiCell {
-    pub corners: Vec<(f64, f64)>,
-    pub neighbors: Vec<NLGridId>,
-}
-
-impl NLGridId {
-    pub fn new(x: i64, y: i64, deformation: f64) -> Self {
-        Self(x, y, deformation)
-    }
-
-    pub fn from(x: f64, y: f64, deformation: f64) -> Self {
-        let lid = GridId::from(x, y);
-        let around_lids = lid.get_around();
-
-        let mut best_nlid = Self(lid.0, lid.1, deformation);
-        let site = best_nlid.site();
-        let mut best_sqdist = square_distance(&(x, y), &site);
-        for around_lid in around_lids {
-            let around_nlid = Self(around_lid.0, around_lid.1, deformation);
-            let site = around_nlid.site();
-            let sqdist = square_distance(&(x, y), &site);
-            if sqdist < best_sqdist {
-                best_nlid = around_nlid;
-                best_sqdist = sqdist;
-            }
-        }
-        best_nlid
-    }
-
-    pub fn hash(&self) -> u64 {
-        hash_2d(self.0, self.1)
-    }
-
-    pub fn site(&self) -> (f64, f64) {
-        let rel_core = site_point_from_hash(hash_2d(self.0, self.1), self.2);
-        (self.0 as f64 + rel_core.0, self.1 as f64 + rel_core.1)
-    }
-
-    pub fn query_surroundings(x: f64, y: f64, deformation: f64, radius: f64) -> Vec<Self> {
-        let lid = GridId::from(x, y);
-        let rad_ceil = radius.ceil() as i64;
-        let mut surroundings = Vec::new();
-
-        for dy in -rad_ceil..=rad_ceil {
-            for dx in -rad_ceil..=rad_ceil {
-                let nlid = Self(lid.0 + dx, lid.1 + dy, deformation);
-                if square_distance(&(x, y), &nlid.site()) < radius.powi(2) {
-                    surroundings.push(nlid);
-                }
-            }
-        }
-        surroundings
-    }
-
-    /// Get the voronoi cell.
-    pub fn calculate_voronoi(&self) -> NLGridVoronoiCell {
-        let site = self.site();
-        let lid = GridId::from(self.0 as f64, self.1 as f64);
-
-        // little bit complicated logic for large deformation
-        let wide = self.2 > 0.5;
-
-        let (mut around_sites, mut around_lids) = if wide {
-            let around_lids = lid.get_around_wide();
-
-            let mut around_sites: Vec<(f64, f64)> = vec![(0.0, 0.0); 20];
-            for i in 0..around_lids.len() {
-                around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
-            }
-
-            // sort by its phase
-            let mut idx = (0..around_sites.len()).collect::<Vec<usize>>();
-            idx.sort_by(|a, b| {
-                let a_phase = (around_sites[*a].0 - site.0).atan2(around_sites[*a].1 - site.1);
-                let b_phase = (around_sites[*b].0 - site.0).atan2(around_sites[*b].1 - site.1);
-                a_phase.total_cmp(&b_phase)
-            });
-
-            let around_sites = idx
-                .iter()
-                .map(|&i| around_sites[i])
-                .collect::<Vec<(f64, f64)>>();
-            let around_lids = idx.iter().map(|&i| around_lids[i]).collect::<Vec<GridId>>();
-
-            (around_sites, around_lids)
-        } else {
-            let around_lids = lid.get_around();
-
-            let mut around_sites = vec![(0.0, 0.0); 8];
-            for i in 0..around_lids.len() {
-                around_sites[i] = Self(around_lids[i].0, around_lids[i].1, self.2).site();
-            }
-            (around_sites, around_lids.to_vec())
-        };
-
-        for _ in 0..65536 {
-            let mut centers = vec![(0.0, 0.0); around_sites.len()];
-            for i in 0..around_sites.len() {
-                let ia = (i + 1) % around_sites.len();
-                centers[i] = circumcenter(&[&around_sites[i], &around_sites[ia], &site]);
-            }
-
-            let mut applied = vec![false; around_sites.len()];
-            for i in 0..around_sites.len() {
-                let ib = (i + around_sites.len() - 1) % around_sites.len();
-                let ia = (i + 1) % around_sites.len();
-
-                let center_a = centers[i];
-                let radius_a = square_distance(&center_a, &around_sites[i]);
-                if square_distance(&center_a, &around_sites[ib]) < radius_a {
-                    continue;
-                }
-
-                let center_b = centers[ib];
-                let radius_b = square_distance(&center_b, &around_sites[i]);
-                if square_distance(&center_b, &around_sites[ia]) < radius_b {
-                    continue;
-                }
-
-                applied[i] = true;
-            }
-
-            (around_sites, around_lids) = around_sites
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| applied[*i])
-                .map(|(i, &x)| (x, around_lids[i]))
-                .unzip();
-
-            if applied.iter().all(|&x| x) {
-                break;
-            }
-
-            if !wide {
-                break;
-            }
-        }
-
-        let mut centers = Vec::new();
-
-        for i in 0..around_sites.len() {
-            let center = circumcenter(&[
-                &around_sites[i],
-                &around_sites[(i + 1) % around_sites.len()],
-                &site,
-            ]);
-            centers.push(center);
-        }
-
-        NLGridVoronoiCell {
-            corners: centers,
-            neighbors: around_lids
-                .iter()
-                .map(|&x| Self(x.0, x.1, self.2))
-                .collect(),
-        }
-    }
+fn get_grids_wide_around(x: i64, y: i64) -> [(i64, i64); 20] {
+    [
+        (x - 1, y - 2),
+        (x, y - 2),
+        (x + 1, y - 2),
+        (x - 2, y - 1),
+        (x - 1, y - 1),
+        (x, y - 1),
+        (x + 1, y - 1),
+        (x + 2, y - 1),
+        (x - 2, y),
+        (x - 1, y),
+        (x + 1, y),
+        (x + 2, y),
+        (x - 2, y + 1),
+        (x - 1, y + 1),
+        (x, y + 1),
+        (x + 1, y + 1),
+        (x + 2, y + 1),
+        (x - 1, y + 2),
+        (x, y + 2),
+        (x + 1, y + 2),
+    ]
 }
 
 fn square_distance(p1: &(f64, f64), p2: &(f64, f64)) -> f64 {
@@ -264,6 +77,186 @@ fn site_point_from_hash(hash: u64, diameter: f64) -> (f64, f64) {
     (radius * theta.cos(), radius * theta.sin())
 }
 
+fn get_grid(x: f64, y: f64) -> (i64, i64) {
+    (x.round() as i64, y.round() as i64)
+}
+
+/// A worley cell.
+/// feature point and the degree of deformation (in \[0.0,1.0\]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WorleyCell(i64, i64, f64);
+
+impl Hash for WorleyCell {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+        self.2.to_bits().hash(state);
+    }
+}
+
+impl Eq for WorleyCell {}
+
+pub struct WorleyPolygon {
+    pub polygon: Vec<(f64, f64)>,
+    pub neighbors: Vec<WorleyCell>,
+}
+
+impl WorleyCell {
+    pub fn new(x: i64, y: i64, deformation: f64) -> Self {
+        Self(x, y, deformation)
+    }
+
+    pub fn from(x: f64, y: f64, deformation: f64) -> Self {
+        let (ix, iy) = get_grid(x, y);
+        let wc = Self(ix, iy, deformation);
+        let mut best_wc = wc;
+        let mut best_sqdist = square_distance(&(x, y), &wc.site());
+
+        for (nx, ny) in get_grids_around(ix, iy).iter() {
+            let wc = Self(*nx, *ny, deformation);
+            let sqdist = square_distance(&(x, y), &wc.site());
+            if sqdist < best_sqdist {
+                best_wc = wc;
+                best_sqdist = sqdist;
+            }
+        }
+
+        best_wc
+    }
+
+    pub fn hash_u64(&self) -> u64 {
+        hash_2d(self.0, self.1)
+    }
+
+    pub fn site(&self) -> (f64, f64) {
+        let rel_core = site_point_from_hash(hash_2d(self.0, self.1), self.2);
+        (self.0 as f64 + rel_core.0, self.1 as f64 + rel_core.1)
+    }
+
+    pub fn inside_radius(x: f64, y: f64, deformation: f64, radius: f64) -> Vec<Self> {
+        let rad_ceil = radius.ceil() as i64;
+        let mut surroundings = Vec::new();
+        let (ix, iy) = get_grid(x, y);
+
+        for dy in -rad_ceil..=rad_ceil {
+            for dx in -rad_ceil..=rad_ceil {
+                let wc = Self(ix + dx, iy + dy, deformation);
+                if square_distance(&(x, y), &wc.site()) < radius.powi(2) {
+                    surroundings.push(wc);
+                }
+            }
+        }
+        surroundings
+    }
+
+    /// Get the voronoi cell.
+    pub fn calculate_voronoi(&self) -> WorleyPolygon {
+        let site = self.site();
+        let (ix, iy) = (self.0, self.1);
+
+        // little bit complicated logic for large deformation
+        let wide = self.2 > 0.5;
+
+        let (mut around_sites, mut around_grids) = if wide {
+            let around_grids = get_grids_wide_around(ix, iy);
+
+            let mut around_sites: Vec<(f64, f64)> = vec![(0.0, 0.0); 20];
+            for i in 0..around_grids.len() {
+                around_sites[i] = Self(around_grids[i].0, around_grids[i].1, self.2).site();
+            }
+
+            // sort by its phase
+            let mut idx = (0..around_sites.len()).collect::<Vec<usize>>();
+            idx.sort_by(|a, b| {
+                let a_phase = (around_sites[*a].0 - site.0).atan2(around_sites[*a].1 - site.1);
+                let b_phase = (around_sites[*b].0 - site.0).atan2(around_sites[*b].1 - site.1);
+                a_phase.total_cmp(&b_phase)
+            });
+
+            let around_sites = idx
+                .iter()
+                .map(|&i| around_sites[i])
+                .collect::<Vec<(f64, f64)>>();
+            let around_grids = idx
+                .iter()
+                .map(|&i| around_grids[i])
+                .collect::<Vec<(i64, i64)>>();
+
+            (around_sites, around_grids)
+        } else {
+            let around_grids = get_grids_around(ix, iy);
+
+            let mut around_sites = vec![(0.0, 0.0); 8];
+            for i in 0..around_grids.len() {
+                around_sites[i] = Self(around_grids[i].0, around_grids[i].1, self.2).site();
+            }
+            (around_sites, around_grids.to_vec())
+        };
+
+        for _ in 0..65536 {
+            let mut centers = vec![(0.0, 0.0); around_sites.len()];
+            for i in 0..around_sites.len() {
+                let ia = (i + 1) % around_sites.len();
+                centers[i] = circumcenter(&[&around_sites[i], &around_sites[ia], &site]);
+            }
+
+            let mut applied = vec![false; around_sites.len()];
+            for i in 0..around_sites.len() {
+                let ib = (i + around_sites.len() - 1) % around_sites.len();
+                let ia = (i + 1) % around_sites.len();
+
+                let center_a = centers[i];
+                let radius_a = square_distance(&center_a, &around_sites[i]);
+                if square_distance(&center_a, &around_sites[ib]) < radius_a {
+                    continue;
+                }
+
+                let center_b = centers[ib];
+                let radius_b = square_distance(&center_b, &around_sites[i]);
+                if square_distance(&center_b, &around_sites[ia]) < radius_b {
+                    continue;
+                }
+
+                applied[i] = true;
+            }
+
+            (around_sites, around_grids) = around_sites
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| applied[*i])
+                .map(|(i, &x)| (x, around_grids[i]))
+                .unzip();
+
+            if applied.iter().all(|&x| x) {
+                break;
+            }
+
+            if !wide {
+                break;
+            }
+        }
+
+        let mut centers = Vec::new();
+
+        for i in 0..around_sites.len() {
+            let center = circumcenter(&[
+                &around_sites[i],
+                &around_sites[(i + 1) % around_sites.len()],
+                &site,
+            ]);
+            centers.push(center);
+        }
+
+        WorleyPolygon {
+            polygon: centers,
+            neighbors: around_grids
+                .iter()
+                .map(|&x| Self(x.0, x.1, self.2))
+                .collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -294,32 +287,32 @@ mod test {
     #[test]
     fn test_calculate_voronoi() {
         let deform = 1.0 - 1e-9;
-        let nlid = NLGridId::from(0.0, 0.0, deform);
-        let voronoi = nlid.calculate_voronoi();
-        assert_eq!(voronoi.corners.len(), voronoi.neighbors.len());
+        let wc = WorleyCell::from(0.0, 0.0, deform);
+        let voronoi = wc.calculate_voronoi();
+        assert_eq!(voronoi.polygon.len(), voronoi.neighbors.len());
 
         for i in 0..voronoi.neighbors.len() {
             let a = voronoi.neighbors[i].site();
             let b = voronoi.neighbors[(i + 1) % voronoi.neighbors.len()].site();
-            let c = nlid.site();
+            let c = wc.site();
             let center = circumcenter(&[&a, &b, &c]);
-            assert!(square_distance(&center, &voronoi.corners[i]) < 1e-9);
+            assert!(square_distance(&center, &voronoi.polygon[i]) < 1e-9);
         }
     }
 
     #[test]
-    fn test_query_surroundings() {
+    fn test_inside_radius() {
         (0..100).for_each(|seed| {
             let mut rng = StdRng::from_seed([seed; 32]);
-            let point = (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0));
-            let deform = rng.gen_range(0.0..1.0);
-            let radius = rng.gen_range(0.0..100.0);
-            let surroundings = NLGridId::query_surroundings(point.0, point.1, deform, radius);
+            let point: (f64, f64) = (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0));
+            let deform: f64 = rng.gen_range(0.0..1.0);
+            let radius: f64 = rng.gen_range(0.0..100.0);
+            let surroundings = WorleyCell::inside_radius(point.0, point.1, deform, radius);
             let mut count = 0;
             for iy in -(radius.ceil() + 1.0) as i64 * 5..=(radius.ceil() + 1.0) as i64 * 5 {
                 for ix in -(radius.ceil() + 1.0) as i64 * 5..=(radius.ceil() + 1.0) as i64 * 5 {
-                    let nlid = NLGridId::new(point.0 as i64 + ix, point.1 as i64 + iy, deform);
-                    if square_distance(&point, &nlid.site()) < radius.powi(2) {
+                    let wc = WorleyCell::new(point.0 as i64 + ix, point.1 as i64 + iy, deform);
+                    if square_distance(&point, &wc.site()) < radius.powi(2) {
                         count += 1;
                     }
                 }

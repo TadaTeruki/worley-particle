@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use nonlinear_grid::NLGridId;
+use nonlinear_grid::WorleyCell;
+
 struct FadePolygon {
     points: Vec<(f64, f64)>,
     center: (f64, f64),
@@ -76,7 +77,7 @@ fn main() {
 
     let mut image_buf = image::RgbImage::new(image_width, image_height);
 
-    let mut polygon_cache: HashMap<NLGridId, FadePolygon> = HashMap::new();
+    let mut polygon_cache: HashMap<WorleyCell, FadePolygon> = HashMap::new();
 
     let scale = 3.0;
 
@@ -85,14 +86,14 @@ fn main() {
             let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64 * scale;
             let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64 * scale;
 
-            let nlgrid_id = NLGridId::from(x, y, 0.8);
+            let wc = WorleyCell::from(x, y, 0.8);
 
-            let fade = if let Some(polygon) = polygon_cache.get(&nlgrid_id) {
+            let fade = if let Some(polygon) = polygon_cache.get(&wc) {
                 polygon.fade((x, y))
             } else {
-                let polygon = FadePolygon::new(nlgrid_id.calculate_voronoi().corners);
+                let polygon = FadePolygon::new(wc.calculate_voronoi().polygon);
                 let fade = polygon.fade((x, y));
-                polygon_cache.insert(nlgrid_id, polygon);
+                polygon_cache.insert(wc, polygon);
                 fade
             };
             let f = (fade * 255.0) as u8;

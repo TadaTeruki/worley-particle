@@ -1,4 +1,4 @@
-use nonlinear_grid::NLGridId;
+use nonlinear_grid::WorleyCell;
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 fn main() {
@@ -10,15 +10,15 @@ fn main() {
 
     for iy in 0..n {
         for ix in 0..n {
-            let nlgrid_id = NLGridId::from(ix as f64, iy as f64, 0.8);
-            let voronoi = nlgrid_id.calculate_voronoi().corners;
+            let wc = WorleyCell::from(ix as f64, iy as f64, 0.8);
+            let voronoi = wc.calculate_voronoi().polygon;
 
             if voronoi.len() < 3 {
                 continue;
             }
 
             let mut paint = Paint::default();
-            let hash = nlgrid_id.hash();
+            let hash = wc.hash_u64();
             let r = (hash % 256) as u8;
             let g = (hash / 256 % 256) as u8;
             let b = (hash / 65536 % 256) as u8;
