@@ -74,7 +74,7 @@ fn hash_2d(x: i64, y: i64) -> u64 {
 }
 
 fn site_point_from_hash(hash: u64, min_diameter: f64, max_diameter: f64) -> (f64, f64) {
-    let hash01 = (hash as f64 / std::u16::MAX as f64).fract();
+    let hash01 = (hash as f64 / u16::MAX as f64).fract();
     let theta = hash01 * 2.0 * std::f64::consts::PI;
     let radius = if min_diameter == max_diameter {
         min_diameter
@@ -137,9 +137,9 @@ impl Default for WorleyParameters {
 
 impl WorleyParameters {
     pub fn new(min_randomness: f64, max_randomness: f64, scale: f64) -> Result<Self, WorleyError> {
-        Ok(Self::default()
+        Self::default()
             .set_randomness(min_randomness, max_randomness)?
-            .set_scale(scale)?)
+            .set_scale(scale)
     }
 
     pub fn set_randomness(
@@ -161,6 +161,14 @@ impl WorleyParameters {
         }
         self.scale = scale;
         Ok(self)
+    }
+
+    pub fn randomness(&self) -> (f64, f64) {
+        (self.min_randomness, self.max_randomness)
+    }
+
+    pub fn scale(&self) -> f64 {
+        self.scale
     }
 }
 
