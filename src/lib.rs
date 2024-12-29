@@ -232,6 +232,7 @@ impl WorleyCell {
     }
 
     pub fn inside_radius(x: f64, y: f64, parameters: WorleyParameters, radius: f64) -> Vec<Self> {
+        let radius = radius / parameters.scale;
         let rad_ceil = radius.ceil() as i64;
         let mut surroundings = Vec::new();
         let (ix, iy) = get_grid(x / parameters.scale, y / parameters.scale);
