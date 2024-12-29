@@ -163,11 +163,11 @@ impl WorleyParameters {
         Ok(self)
     }
 
-    pub fn randomness(&self) -> (f64, f64) {
+    pub fn get_randomness(&self) -> (f64, f64) {
         (self.min_randomness, self.max_randomness)
     }
 
-    pub fn scale(&self) -> f64 {
+    pub fn get_scale(&self) -> f64 {
         self.scale
     }
 }
