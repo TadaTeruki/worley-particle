@@ -116,7 +116,7 @@ fn main() {
             let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64 * scale;
             let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64 * scale;
 
-            let wc = WorleyCell::from(x, y, 0.8);
+            let wc = WorleyCell::from(x, y, 0.8, 0.8).unwrap();
 
             let fade = if let Some(polygon) = polygon_cache.get(&wc) {
                 polygon.fade((x, y))

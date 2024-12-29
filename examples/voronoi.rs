@@ -10,7 +10,7 @@ fn main() {
 
     for iy in 0..n {
         for ix in 0..n {
-            let wc = WorleyCell::from(ix as f64, iy as f64, 0.6);
+            let wc = WorleyCell::from(ix as f64, iy as f64, 1.0, 1.0).unwrap();
             let voronoi = wc.calculate_voronoi().polygon;
 
             if voronoi.len() < 3 {
