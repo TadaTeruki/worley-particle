@@ -1,4 +1,6 @@
-use nonlinear_grid::WorleyCell;
+use std::collections::HashSet;
+
+use nonlinear_grid::{WorleyCell, WorleyParameters};
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 fn main() {
@@ -6,11 +8,22 @@ fn main() {
     let image_height = 500;
     let mut pixmap = Pixmap::new(image_width, image_height).unwrap();
 
-    let n = 20;
+    let (min_x, max_x) = (-1.0, 1.0);
+    let (min_y, max_y) = (-1.0, 1.0);
 
-    for iy in 0..n {
-        for ix in 0..n {
-            let wc = WorleyCell::from(ix as f64, iy as f64, 1.0, 1.0).unwrap();
+    let mut cells = HashSet::new();
+
+    for iy in 0..image_height {
+        for ix in 0..image_width {
+            let x = min_x + (max_x - min_x) * (ix as f64 / image_width as f64);
+            let y = min_y + (max_y - min_y) * (iy as f64 / image_height as f64);
+
+            let params = WorleyParameters::new(0.8, 0.8, 0.1).unwrap();
+            let wc = WorleyCell::from(x, y, params);
+            if cells.contains(&wc) {
+                continue;
+            }
+            cells.insert(wc);
             let voronoi = wc.calculate_voronoi().polygon;
 
             if voronoi.len() < 3 {
@@ -28,22 +41,26 @@ fn main() {
                 let mut pb = PathBuilder::new();
 
                 for i in 0..voronoi.len() {
-                    let x = (voronoi[i].0) * image_width as f64 / (n - 1) as f64;
-                    let y = (voronoi[i].1) * image_height as f64 / (n - 1) as f64;
+                    let px = (voronoi[i].0 - min_x) / (max_x - min_x) * image_width as f64;
+                    let py = (voronoi[i].1 - min_y) / (max_y - min_y) * image_height as f64;
                     if i == 0 {
-                        pb.move_to(x as f32, y as f32);
+                        pb.move_to(px as f32, py as f32);
                     } else {
-                        pb.line_to(x as f32, y as f32);
+                        pb.line_to(px as f32, py as f32);
                     }
                 }
                 pb.close();
-                pb.finish().unwrap()
+                pb.finish()
             };
+
+            if path.is_none() {
+                continue;
+            }
 
             let mut stroke = Stroke::default();
             stroke.width = 2.0;
 
-            pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
+            pixmap.stroke_path(&path.unwrap(), &paint, &stroke, Transform::identity(), None);
         }
     }
     pixmap.save_png("out/image.png").unwrap();

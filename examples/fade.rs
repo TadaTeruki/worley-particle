@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use nonlinear_grid::WorleyCell;
+use nonlinear_grid::{WorleyCell, WorleyParameters};
 
 struct FadePolygon {
     points: Vec<(f64, f64)>,
@@ -109,14 +109,14 @@ fn main() {
 
     let mut polygon_cache: HashMap<WorleyCell, FadePolygon> = HashMap::new();
 
-    let scale = 3.0;
-
     for iy in 0..image_height {
         for ix in 0..image_width {
-            let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64 * scale;
-            let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64 * scale;
+            let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64;
+            let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64;
 
-            let wc = WorleyCell::from(x, y, 0.8, 0.8).unwrap();
+            let params = WorleyParameters::new(0.8, 0.8, 0.1).unwrap();
+
+            let wc = WorleyCell::from(x, y, params);
 
             let fade = if let Some(polygon) = polygon_cache.get(&wc) {
                 polygon.fade((x, y))
