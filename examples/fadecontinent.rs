@@ -15,6 +15,10 @@ fn triangle_area(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
     (a.0 * (b.1 - c.1) + b.0 * (c.1 - a.1) + c.0 * (a.1 - b.1)).abs() / 2.0
 }
 
+fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+    ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
+}
+
 fn point_in_triangle(p: (f64, f64), a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> bool {
     let s = triangle_area(a, b, c);
     let s1 = triangle_area(p, b, c);
@@ -33,6 +37,30 @@ impl FadePolygon {
     }
 
     pub fn fade(&self, point: (f64, f64)) -> f64 {
+        let dists_poly = self
+            .points
+            .iter()
+            .map(|p| distance(*p, point))
+            .collect::<Vec<f64>>();
+
+        let dist_center = distance(self.center, point);
+
+        let eps = 1e-7;
+        if dists_poly.iter().any(|d| *d < eps) {
+            return 0.0;
+        }
+        if dist_center < eps {
+            return 1.0;
+        }
+
+        let dists_inv_poly = dists_poly.iter().map(|d| 1.0 / d).collect::<Vec<f64>>();
+        let sum_inv_poly = dists_inv_poly.iter().sum::<f64>();
+
+        let dist_inv_center = 1.0 / dist_center;
+        let sum_inv = sum_inv_poly + dist_inv_center;
+
+        let fade_a = (dist_inv_center / sum_inv).sqrt();
+
         let rel_point = (point.0 - self.center.0, point.1 - self.center.1);
         let rel_poly = self
             .points
@@ -65,7 +93,9 @@ impl FadePolygon {
         let u = (-ev.0 * p.1 + ev.1 * p.0) / d;
         let v = (eu.0 * p.1 - eu.1 * p.0) / d;
 
-        grad(1.0 - u - v)
+        let fade_b = 1.0 - u - v;
+
+        grad(fade_a.min(fade_b))
     }
 }
 

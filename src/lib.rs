@@ -1,4 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{
+    cmp::Ordering,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 fn get_grids_around(x: i64, y: i64) -> [(i64, i64); 8] {
     [
@@ -81,8 +84,14 @@ fn get_grid(x: f64, y: f64) -> (i64, i64) {
     (x.round() as i64, y.round() as i64)
 }
 
-/// A worley cell.
-/// feature point and the degree of deformation (in \[0.0,1.0\]).
+fn arg_cmp(a: (f64, f64), b: (f64, f64)) -> Ordering {
+    ((b.0, b.1) < (0., 0.))
+        .cmp(&((a.0, a.1) < (0., 0.)))
+        .then((a.0 * b.1).total_cmp(&(b.0 * a.1)))
+}
+
+/// A cell of worley noise.
+/// The feature point (x, y) and the degree of deformation (in \[0.0,1.0\]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WorleyCell(i64, i64, f64);
 
@@ -159,27 +168,23 @@ impl WorleyCell {
 
         let (mut around_sites, mut around_grids) = if wide {
             let around_grids = get_grids_wide_around(ix, iy);
+            let around_sites = around_grids
+                .iter()
+                .map(|&x| Self(x.0, x.1, self.2).site())
+                .collect::<Vec<(f64, f64)>>();
 
-            let mut around_sites: Vec<(f64, f64)> = vec![(0.0, 0.0); 20];
-            for i in 0..around_grids.len() {
-                around_sites[i] = Self(around_grids[i].0, around_grids[i].1, self.2).site();
-            }
-
-            // sort by its phase
-            let mut idx = (0..around_sites.len()).collect::<Vec<usize>>();
-            idx.sort_by(|a, b| {
-                let a_phase = (around_sites[*a].0 - site.0).atan2(around_sites[*a].1 - site.1);
-                let b_phase = (around_sites[*b].0 - site.0).atan2(around_sites[*b].1 - site.1);
-                a_phase.total_cmp(&b_phase)
-            });
+            let mut idx = (0..around_sites.len())
+                .zip(around_sites.iter().map(|&x| (x.0 - site.0, x.1 - site.1)))
+                .collect::<Vec<(usize, (f64, f64))>>();
+            idx.sort_by(|a, b| arg_cmp(a.1, b.1));
 
             let around_sites = idx
                 .iter()
-                .map(|&i| around_sites[i])
+                .map(|&(i, _)| around_sites[i])
                 .collect::<Vec<(f64, f64)>>();
             let around_grids = idx
                 .iter()
-                .map(|&i| around_grids[i])
+                .map(|&(i, _)| around_grids[i])
                 .collect::<Vec<(i64, i64)>>();
 
             (around_sites, around_grids)
@@ -262,6 +267,42 @@ mod test {
     use rand::{rngs::StdRng, Rng, SeedableRng};
 
     use super::*;
+
+    #[test]
+    fn test_arg_cmp() {
+        let points = {
+            let mut rng = StdRng::from_seed([0; 32]);
+            (0..100)
+                .map(|_| (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0)))
+                .collect::<Vec<(f64, f64)>>()
+        };
+        let mut sorted_det = points.clone();
+        let mut sorted_atan = points.clone();
+        sorted_det.sort_by(|a, b| arg_cmp(*a, *b));
+        sorted_atan.sort_by(|a, b| {
+            let a = a.0.atan2(a.1);
+            let b = b.0.atan2(b.1);
+            a.total_cmp(&b)
+        });
+
+        // search same points
+        let idx_atan = {
+            let mut idx_atan = points.len();
+            for i in 0..points.len() {
+                if sorted_atan[i] == sorted_det[0] {
+                    idx_atan = i;
+                    break;
+                }
+            }
+            idx_atan
+        };
+
+        assert!(idx_atan < points.len());
+
+        for i in 0..points.len() {
+            assert_eq!(sorted_det[i], sorted_atan[(i + idx_atan) % points.len()]);
+        }
+    }
 
     #[test]
     fn test_core_points() {
