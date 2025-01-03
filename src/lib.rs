@@ -66,10 +66,11 @@ fn circumcenter(triangle: &[&(f64, f64); 3]) -> (f64, f64) {
     (ux, uy)
 }
 
-fn hash_2d(x: i64, y: i64) -> u64 {
+fn hash_2d(x: i64, y: i64, seed: u64) -> u64 {
     let mut hasher = DefaultHasher::new();
     x.hash(&mut hasher);
     y.hash(&mut hasher);
+    seed.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -113,6 +114,8 @@ pub struct WorleyParameters {
     max_randomness: f64,
     /// Scale of the grid.
     scale: f64,
+    /// The seed of the random number generator.
+    seed: u64,
 }
 
 impl Hash for WorleyParameters {
@@ -120,6 +123,7 @@ impl Hash for WorleyParameters {
         self.min_randomness.to_bits().hash(state);
         self.max_randomness.to_bits().hash(state);
         self.scale.to_bits().hash(state);
+        self.seed.hash(state);
     }
 }
 
@@ -131,15 +135,22 @@ impl Default for WorleyParameters {
             min_randomness: 0.5,
             max_randomness: 0.5,
             scale: 1.0,
+            seed: 0,
         }
     }
 }
 
 impl WorleyParameters {
-    pub fn new(min_randomness: f64, max_randomness: f64, scale: f64) -> Result<Self, WorleyError> {
+    pub fn new(
+        min_randomness: f64,
+        max_randomness: f64,
+        scale: f64,
+        seed: u64,
+    ) -> Result<Self, WorleyError> {
         Self::default()
             .set_randomness(min_randomness, max_randomness)?
-            .set_scale(scale)
+            .set_scale(scale)?
+            .set_seed(seed)
     }
 
     pub fn set_randomness(
@@ -160,6 +171,11 @@ impl WorleyParameters {
             return Err(WorleyError::InvalidScale);
         }
         self.scale = scale;
+        Ok(self)
+    }
+
+    pub fn set_seed(mut self, seed: u64) -> Result<Self, WorleyError> {
+        self.seed = seed;
         Ok(self)
     }
 
@@ -229,7 +245,7 @@ impl WorleyCell {
 
     pub fn site(&self) -> (f64, f64) {
         let rel_core = site_point_from_hash(
-            hash_2d(self.grid.0, self.grid.1),
+            hash_2d(self.grid.0, self.grid.1, self.parameters.seed),
             self.parameters.min_randomness,
             self.parameters.max_randomness,
         );
@@ -411,7 +427,7 @@ mod test {
         let mut ysum = 0.0;
         for iy in 0..n {
             for ix in 0..n {
-                let point = site_point_from_hash(hash_2d(ix, iy), 1.0, 1.0);
+                let point = site_point_from_hash(hash_2d(ix, iy, 0), 1.0, 1.0);
                 xsum += point.0;
                 ysum += point.1;
             }
@@ -428,7 +444,7 @@ mod test {
     #[test]
     fn test_calculate_voronoi() {
         let randomness = 0.9;
-        let params = WorleyParameters::new(randomness, randomness, 1.0).unwrap();
+        let params = WorleyParameters::new(randomness, randomness, 1.0, 0).unwrap();
         let wc = WorleyCell::from(0.0, 0.0, params);
         let voronoi = wc.calculate_voronoi();
         assert_eq!(voronoi.polygon.len(), voronoi.neighbors.len());
@@ -448,7 +464,7 @@ mod test {
             let mut rng = StdRng::from_seed([seed; 32]);
             let point: (f64, f64) = (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0));
             let randomness: f64 = rng.gen_range(0.0..0.9);
-            let params = WorleyParameters::new(randomness, randomness, 1.0).unwrap();
+            let params = WorleyParameters::new(randomness, randomness, 1.0, 0).unwrap();
             let radius: f64 = rng.gen_range(0.0..100.0);
             let mut count = 0;
             let surroundings = WorleyCell::inside_radius(point.0, point.1, params, radius);

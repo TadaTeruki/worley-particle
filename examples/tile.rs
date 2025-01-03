@@ -12,7 +12,7 @@ fn main() {
             let x = min_x + (max_x - min_x) * ix as f64 / image_width as f64;
             let y = min_y + (max_y - min_y) * iy as f64 / image_height as f64;
 
-            let params = WorleyParameters::new(0.8, 0.8, 0.1).unwrap();
+            let params = WorleyParameters::new(0.8, 0.8, 0.1, 0).unwrap();
             let wc = WorleyCell::from(x, y, params);
             let hash = wc.hash_u64();
             let r = (hash % 256) as u8;
