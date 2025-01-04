@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use nonlinear_grid::{WorleyCell, WorleyParameters};
+use pworley::{WorleyCell, WorleyParameters};
 
 struct FadePolygon {
     points: Vec<(f64, f64)>,

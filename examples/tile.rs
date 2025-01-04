@@ -1,4 +1,4 @@
-use nonlinear_grid::{WorleyCell, WorleyParameters};
+use pworley::{WorleyCell, WorleyParameters};
 
 fn main() {
     let (min_x, max_x) = (-1.0, 1.0);

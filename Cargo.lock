@@ -458,16 +458,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nonlinear-grid"
-version = "0.1.0"
-dependencies = [
- "image",
- "rand",
- "thiserror 2.0.9",
- "tiny-skia",
-]
-
-[[package]]
 name = "noop_proc_macro"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -589,6 +579,16 @@ checksum = "a65f2e60fbf1063868558d69c6beacf412dc755f9fc020f514b7955fc914fe30"
 dependencies = [
  "quote",
  "syn",
+]
+
+[[package]]
+name = "pworley"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "rand",
+ "thiserror 2.0.9",
+ "tiny-skia",
 ]
 
 [[package]]

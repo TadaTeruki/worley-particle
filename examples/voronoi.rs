@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use nonlinear_grid::{WorleyCell, WorleyParameters};
+use pworley::{WorleyCell, WorleyParameters};
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 fn main() {
