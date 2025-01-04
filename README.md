@@ -1,7 +1,7 @@
 
 # pworley
 
-A Simple Workey Noise Generator
+A Simple Worley Noise Generator written in Rust.
 
 pworley does:
 
