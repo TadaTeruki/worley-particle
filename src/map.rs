@@ -4,13 +4,41 @@ use crate::{WorleyCell, WorleyParameters};
 
 #[derive(Debug, Clone)]
 pub struct WorleyMap<T: WorleyMapAttribute> {
+    parameters: WorleyParameters,
     particles: HashMap<WorleyCell, T>,
 }
 
 pub trait WorleyMapAttribute: Debug + Clone + PartialEq {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_string(&self) -> String;
+}
+
+pub trait WorleyMapAttributeLerp: WorleyMapAttribute {
     fn lerp(&self, other: &Self, t: f64) -> Self;
+}
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct IDWStrategy {
+    pub sample_min_distance: f64,
+    pub sample_max_distance: f64,
+    pub weight_power: f64,
+    pub linear_smooth: bool,
+}
+
+impl Default for IDWStrategy {
+    fn default() -> Self {
+        Self {
+            sample_min_distance: 1e-6,
+            sample_max_distance: f64::INFINITY,
+            weight_power: 1.0,
+            linear_smooth: true,
+        }
+    }
+}
+
+pub enum RasterizationMethod {
+    Nearest,
+    IDW(IDWStrategy),
 }
 
 impl WorleyMapAttribute for f64 {
@@ -25,7 +53,9 @@ impl WorleyMapAttribute for f64 {
     fn to_string(&self) -> String {
         ToString::to_string(self)
     }
+}
 
+impl WorleyMapAttributeLerp for f64 {
     fn lerp(&self, other: &Self, t: f64) -> Self {
         self + (other - self) * t
     }
@@ -39,19 +69,14 @@ impl WorleyMapAttribute for String {
     fn to_string(&self) -> String {
         self.clone()
     }
-
-    fn lerp(&self, other: &Self, t: f64) -> Self {
-        if t < 0.5 {
-            self.clone()
-        } else {
-            other.clone()
-        }
-    }
 }
 
 impl<T: WorleyMapAttribute> WorleyMap<T> {
-    pub fn new(particles: HashMap<WorleyCell, T>) -> Self {
-        Self { particles }
+    pub fn new(parameters: WorleyParameters, particles: HashMap<WorleyCell, T>) -> Self {
+        Self {
+            parameters,
+            particles,
+        }
     }
 
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
@@ -111,7 +136,10 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
             })
             .collect::<HashMap<_, _>>();
 
-        Ok(Self { particles })
+        Ok(Self {
+            parameters,
+            particles,
+        })
     }
 
     pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
@@ -165,6 +193,80 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
     }
 }
 
+impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
+    pub fn rasterise(
+        &self,
+        img_width: usize,
+        img_height: usize,
+        corners: ((f64, f64), (f64, f64)),
+        method: RasterizationMethod,
+    ) -> Vec<Vec<Option<T>>> {
+        let ((mut min_x, mut min_y), (mut max_x, mut max_y)) = corners;
+        if min_x > max_x {
+            std::mem::swap(&mut min_x, &mut max_x);
+        }
+        if min_y > max_y {
+            std::mem::swap(&mut min_y, &mut max_y);
+        }
+        let mut raster = vec![vec![None; img_width]; img_height];
+
+        for (iy, item) in raster.iter_mut().enumerate().take(img_height) {
+            for (ix, item) in item.iter_mut().enumerate().take(img_width) {
+                let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
+                let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
+
+                let particle = WorleyCell::from(x, y, self.parameters);
+
+                let value = match method {
+                    RasterizationMethod::Nearest => self.particles.get(&particle).cloned(),
+                    RasterizationMethod::IDW(strategy) => {
+                        let mut total_value: Option<T> = None;
+                        let mut tmp_weight = 0.0;
+                        let inside = WorleyCell::inside_square(
+                            x,
+                            y,
+                            self.parameters,
+                            strategy.sample_max_distance,
+                        );
+                        let particles_iter = inside
+                            .iter()
+                            .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
+                        for (other_particle, value) in particles_iter {
+                            let other_site = other_particle.site();
+                            let distance =
+                                ((x - other_site.0).powi(2) + (y - other_site.1).powi(2)).sqrt();
+                            if distance > strategy.sample_max_distance {
+                                continue;
+                            }
+                            if distance < strategy.sample_min_distance {
+                                total_value = Some(value.clone());
+                                break;
+                            }
+                            let weight = if strategy.linear_smooth {
+                                (1.0 - distance / strategy.sample_max_distance)
+                                    / distance.powf(strategy.weight_power)
+                            } else {
+                                distance.powf(-strategy.weight_power)
+                            };
+                            tmp_weight += weight;
+                            if let Some(total_value) = total_value.as_mut() {
+                                *total_value = total_value.lerp(value, weight / tmp_weight);
+                            } else {
+                                total_value = Some(value.clone());
+                            }
+                        }
+
+                        total_value
+                    }
+                };
+                *item = value;
+            }
+        }
+
+        raster
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,17 +292,6 @@ mod tests {
         fn to_string(&self) -> String {
             format!("{},{}", self.value, self.name)
         }
-
-        fn lerp(&self, other: &Self, t: f64) -> Self {
-            Self {
-                value: self.value + (other.value - self.value) * t,
-                name: if t < 0.5 {
-                    self.name.clone()
-                } else {
-                    other.name.clone()
-                },
-            }
-        }
     }
 
     #[test]
@@ -223,9 +314,9 @@ mod tests {
             .iter()
             .map(|cell| (cell.hash_u64() % 10) as f64)
             .collect::<Vec<_>>();
-        let map = WorleyMap::new(cells.into_iter().zip(values).collect());
+        let map = WorleyMap::new(parameters, cells.into_iter().zip(values).collect());
 
-        map.write_to_file("data/test_cache/out.worleymap").unwrap();
+        map.write_to_file("data/output/out.worleymap").unwrap();
 
         let map2 = WorleyMap::<f64>::read_from_file("data/test_cache/out.worleymap").unwrap();
 

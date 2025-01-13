@@ -26,5 +26,5 @@ seed:150,min_randomness:0.5,max_randomness:0.8,scale:0.05
 This library provides `WorleyMap` class to parse and handle the data.
 - Read data from file
 - Interpolation
-- Rastarization
-- Vectorization (using [contour-rs](https://github.com/mthh/contour-rs))
+- Rastarisation
+- Create Contour (using [contour-rs](https://github.com/mthh/contour-rs))

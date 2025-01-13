@@ -258,8 +258,8 @@ impl WorleyCell {
     }
 
     pub fn inside_radius(x: f64, y: f64, parameters: WorleyParameters, radius: f64) -> Vec<Self> {
-        let radius = radius / parameters.scale;
-        let rad_ceil = radius.ceil() as i64;
+        let radius_scaled = radius / parameters.scale;
+        let rad_ceil = radius_scaled.ceil() as i64;
         let mut surroundings = Vec::new();
         let (ix, iy) = get_grid(x / parameters.scale, y / parameters.scale);
 
@@ -269,6 +269,20 @@ impl WorleyCell {
                 if square_distance(&(x, y), &wc.site()) < radius.powi(2) {
                     surroundings.push(wc);
                 }
+            }
+        }
+        surroundings
+    }
+
+    pub fn inside_square(x: f64, y: f64, parameters: WorleyParameters, side: f64) -> Vec<Self> {
+        let side_scaled = side / parameters.scale;
+        let side_ceil = side_scaled.ceil() as i64;
+        let mut surroundings = Vec::new();
+        let (ix, iy) = get_grid(x / parameters.scale, y / parameters.scale);
+
+        for dy in -side_ceil..=side_ceil {
+            for dx in -side_ceil..=side_ceil {
+                surroundings.push(Self::new(ix + dx, iy + dy, parameters));
             }
         }
         surroundings
