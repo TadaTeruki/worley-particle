@@ -5,6 +5,8 @@ use std::{
 
 use thiserror::Error;
 
+pub mod map;
+
 fn get_grids_around(x: i64, y: i64) -> [(i64, i64); 8] {
     [
         (x - 1, y - 1),
