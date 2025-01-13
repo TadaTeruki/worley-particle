@@ -2,11 +2,12 @@ use std::{collections::HashMap, error::Error, fmt::Debug};
 
 use crate::{WorleyCell, WorleyParameters};
 
+#[derive(Debug, Clone)]
 pub struct WorleyMap<T: WorleyMapAttribute> {
     particles: HashMap<WorleyCell, T>,
 }
 
-pub trait WorleyMapAttribute: Debug + Clone {
+pub trait WorleyMapAttribute: Debug + Clone + PartialEq {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_string(&self) -> String;
     fn lerp(&self, other: &Self, t: f64) -> Self;
@@ -49,17 +50,20 @@ impl WorleyMapAttribute for String {
 }
 
 impl<T: WorleyMapAttribute> WorleyMap<T> {
-    /// Read data from file
+    pub fn new(particles: HashMap<WorleyCell, T>) -> Self {
+        Self { particles }
+    }
+
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
         let data = std::fs::read_to_string(file_path)?
             .lines()
             .map(|line| line.to_string())
             .collect();
 
-        Self::read_from_vec(data)
+        Self::read_from_lines(data)
     }
 
-    pub fn read_from_vec(data: Vec<String>) -> Result<Self, Box<dyn Error>> {
+    pub fn read_from_lines(data: Vec<String>) -> Result<Self, Box<dyn Error>> {
         let mut parameters = WorleyParameters::default();
 
         let mut raw_particles: Vec<(f64, f64)> = Vec::new();
@@ -109,13 +113,63 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
 
         Ok(Self { particles })
     }
+
+    pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
+        let mut data = Vec::new();
+
+        data.push(format!(
+            "seed:{},min_randomness:{},max_randomness:{},scale:{}",
+            self.particles.keys().next().unwrap().parameters.seed,
+            self.particles
+                .keys()
+                .next()
+                .unwrap()
+                .parameters
+                .min_randomness,
+            self.particles
+                .keys()
+                .next()
+                .unwrap()
+                .parameters
+                .max_randomness,
+            self.particles.keys().next().unwrap().parameters.scale
+        ));
+
+        for (particle, other_data) in self.particles.iter() {
+            let site = particle.site();
+            data.push(format!("[{},{}]{}", site.0, site.1, other_data.to_string()));
+        }
+
+        std::fs::write(file_path, data.join("\n"))?;
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn is_same(&self, other: &Self) -> bool {
+        if self.particles.len() != other.particles.len() {
+            return false;
+        }
+
+        for (particle, value) in self.particles.iter() {
+            if let Some(other_value) = other.particles.get(particle) {
+                if value != other_value {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     struct TestAttribute {
         value: f64,
         name: String,
@@ -151,8 +205,30 @@ mod tests {
 
     #[test]
     fn test_read_from_file() {
-        let map = WorleyMap::<TestAttribute>::read_from_file("data/in.worleymap").unwrap();
+        let map = WorleyMap::<TestAttribute>::read_from_file("data/sample.worleymap").unwrap();
 
         assert_eq!(map.particles.len(), 3);
+    }
+
+    #[test]
+    fn test_validate_read_and_write() {
+        let parameters = WorleyParameters {
+            seed: 0,
+            min_randomness: 0.2,
+            max_randomness: 0.5,
+            scale: 0.1,
+        };
+        let cells = WorleyCell::inside_radius(0.0, 0.0, parameters, 10.0);
+        let values = cells
+            .iter()
+            .map(|cell| (cell.hash_u64() % 10) as f64)
+            .collect::<Vec<_>>();
+        let map = WorleyMap::new(cells.into_iter().zip(values).collect());
+
+        map.write_to_file("data/test_cache/out.worleymap").unwrap();
+
+        let map2 = WorleyMap::<f64>::read_from_file("data/test_cache/out.worleymap").unwrap();
+
+        assert!(map.is_same(&map2));
     }
 }
