@@ -22,7 +22,18 @@ pub struct IDWStrategy {
     pub sample_min_distance: f64,
     pub sample_max_distance: f64,
     pub weight_power: f64,
-    pub linear_smooth: bool,
+    pub smooth_power: Option<f64>,
+}
+
+impl IDWStrategy {
+    pub fn default_from_parameters(parameters: &WorleyParameters) -> Self {
+        Self {
+            sample_min_distance: parameters.scale * 1e-6,
+            sample_max_distance: parameters.scale * 1.414,
+            weight_power: 1.5,
+            smooth_power: Some(1.0),
+        }
+    }
 }
 
 impl Default for IDWStrategy {
@@ -31,7 +42,7 @@ impl Default for IDWStrategy {
             sample_min_distance: 1e-6,
             sample_max_distance: f64::INFINITY,
             weight_power: 1.0,
-            linear_smooth: true,
+            smooth_power: Some(1.0),
         }
     }
 }
@@ -242,8 +253,8 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
                                 total_value = Some(value.clone());
                                 break;
                             }
-                            let weight = if strategy.linear_smooth {
-                                (1.0 - distance / strategy.sample_max_distance)
+                            let weight = if let Some(smooth_power) = strategy.smooth_power {
+                                (1.0 - (distance / strategy.sample_max_distance).powf(smooth_power))
                                     / distance.powf(strategy.weight_power)
                             } else {
                                 distance.powf(-strategy.weight_power)

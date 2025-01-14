@@ -4,7 +4,7 @@ use pworley::{
 };
 
 fn main() {
-    let parameters = WorleyParameters::new(0.2, 0.5, 1.0, 0).unwrap();
+    let parameters = WorleyParameters::new(0.8, 0.8, 1.0, 0).unwrap();
     let cells = WorleyCell::inside_radius(0.0, 0.0, parameters, 5.0);
     let values = cells
         .iter()
@@ -20,11 +20,7 @@ fn main() {
         image_width,
         image_height,
         ((-5.0, -5.0), (5.0, 5.0)),
-        RasterizationMethod::IDW(IDWStrategy {
-            sample_max_distance: parameters.get_scale() * 1.5,
-            weight_power: 1.0,
-            ..Default::default()
-        }),
+        RasterizationMethod::IDW(IDWStrategy::default_from_parameters(&parameters)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);
