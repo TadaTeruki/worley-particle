@@ -29,7 +29,7 @@ impl IDWStrategy {
     pub fn default_from_parameters(parameters: &WorleyParameters) -> Self {
         Self {
             sample_min_distance: parameters.scale * 1e-6,
-            sample_max_distance: parameters.scale * 1.414,
+            sample_max_distance: parameters.scale * 1.415,
             weight_power: 1.5,
             smooth_power: Some(1.0),
         }
