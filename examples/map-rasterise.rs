@@ -5,7 +5,7 @@ use pworley::{
 
 fn main() {
     let parameters = WorleyParameters::new(0.8, 0.8, 1.0, 0).unwrap();
-    let cells = WorleyCell::inside_radius(0.0, 0.0, parameters, 5.0);
+    let cells = WorleyCell::from_inside_radius(0.0, 0.0, parameters, 5.0);
     let values = cells
         .iter()
         .map(|cell| (cell.hash_u64() % 10) as f64 * 0.1)

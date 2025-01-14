@@ -233,7 +233,7 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
                     RasterizationMethod::IDW(strategy) => {
                         let mut total_value: Option<T> = None;
                         let mut tmp_weight = 0.0;
-                        let inside = WorleyCell::inside_square(
+                        let inside = WorleyCell::from_inside_square(
                             x,
                             y,
                             self.parameters,
@@ -320,7 +320,7 @@ mod tests {
             max_randomness: 0.5,
             scale: 0.1,
         };
-        let cells = WorleyCell::inside_radius(0.0, 0.0, parameters, 10.0);
+        let cells = WorleyCell::from_inside_radius(0.0, 0.0, parameters, 10.0);
         let values = cells
             .iter()
             .map(|cell| (cell.hash_u64() % 10) as f64)
@@ -329,7 +329,7 @@ mod tests {
 
         map.write_to_file("data/output/out.worleymap").unwrap();
 
-        let map2 = WorleyMap::<f64>::read_from_file("data/test_cache/out.worleymap").unwrap();
+        let map2 = WorleyMap::<f64>::read_from_file("data/output/out.worleymap").unwrap();
 
         assert!(map.is_same(&map2));
     }

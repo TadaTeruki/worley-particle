@@ -257,7 +257,12 @@ impl WorleyCell {
         )
     }
 
-    pub fn inside_radius(x: f64, y: f64, parameters: WorleyParameters, radius: f64) -> Vec<Self> {
+    pub fn from_inside_radius(
+        x: f64,
+        y: f64,
+        parameters: WorleyParameters,
+        radius: f64,
+    ) -> Vec<Self> {
         let (corner_min_x, corner_min_y) = get_grid(
             (x - radius) / parameters.scale,
             (y - radius) / parameters.scale,
@@ -280,7 +285,12 @@ impl WorleyCell {
         surroundings
     }
 
-    pub fn inside_square(x: f64, y: f64, parameters: WorleyParameters, side: f64) -> Vec<Self> {
+    pub fn from_inside_square(
+        x: f64,
+        y: f64,
+        parameters: WorleyParameters,
+        side: f64,
+    ) -> Vec<Self> {
         let (corner_min_x, corner_min_y) =
             get_grid((x - side) / parameters.scale, (y - side) / parameters.scale);
         let (corner_max_x, corner_max_y) =
@@ -491,7 +501,7 @@ mod test {
             let params = WorleyParameters::new(randomness, randomness, 1.0, 0).unwrap();
             let radius: f64 = rng.gen_range(0.0..100.0);
             let mut count = 0;
-            let surroundings = WorleyCell::inside_radius(point.0, point.1, params, radius);
+            let surroundings = WorleyCell::from_inside_radius(point.0, point.1, params, radius);
             for iy in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
                 for ix in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
                     let wc = WorleyCell::new(point.0 as i64 + ix, point.1 as i64 + iy, params);
