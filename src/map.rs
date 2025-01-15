@@ -235,7 +235,7 @@ pub enum RasteriseMethod {
 }
 
 impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
-    pub fn interpolate(&self, x: f64, y: f64, method: &RasteriseMethod) -> Option<T> {
+    pub fn get_value(&self, x: f64, y: f64, method: &RasteriseMethod) -> Option<T> {
         match method {
             RasteriseMethod::Nearest => {
                 let particle = Particle::from(x, y, self.rules);
@@ -298,7 +298,7 @@ impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
             for (ix, item) in item.iter_mut().enumerate().take(img_width) {
                 let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
                 let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
-                *item = self.interpolate(x, y, rasterise_method);
+                *item = self.get_value(x, y, rasterise_method);
             }
         }
 
