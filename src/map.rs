@@ -223,12 +223,55 @@ impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
 }
 
 impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
+    pub fn interpolate(&self, x: f64, y: f64, method: &RasteriseMethod) -> Option<T> {
+        match method {
+            RasteriseMethod::Nearest => {
+                let particle = Particle::from(x, y, self.rules);
+                self.particles.get(&particle).cloned()
+            }
+            RasteriseMethod::IDW(strategy) => {
+                let mut total_value: Option<T> = None;
+                let mut tmp_weight = 0.0;
+                let inside =
+                    Particle::from_inside_square(x, y, self.rules, strategy.sample_max_distance);
+                let particles_iter = inside
+                    .iter()
+                    .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
+                for (other_particle, value) in particles_iter {
+                    let other_site = other_particle.site();
+                    let distance = ((x - other_site.0).powi(2) + (y - other_site.1).powi(2)).sqrt();
+                    if distance > strategy.sample_max_distance {
+                        continue;
+                    }
+                    if distance < strategy.sample_min_distance {
+                        total_value = Some(value.clone());
+                        break;
+                    }
+                    let weight = if let Some(smooth_power) = strategy.smooth_power {
+                        (1.0 - (distance / strategy.sample_max_distance).powf(smooth_power))
+                            / distance.powf(strategy.weight_power)
+                    } else {
+                        distance.powf(-strategy.weight_power)
+                    };
+                    tmp_weight += weight;
+                    if let Some(total_value) = total_value.as_mut() {
+                        *total_value = total_value.lerp(value, weight / tmp_weight);
+                    } else {
+                        total_value = Some(value.clone());
+                    }
+                }
+
+                total_value
+            }
+        }
+    }
+
     pub fn rasterise(
         &self,
         img_width: usize,
         img_height: usize,
         corners: ((f64, f64), (f64, f64)),
-        method: RasteriseMethod,
+        rasterise_method: &RasteriseMethod,
     ) -> Vec<Vec<Option<T>>> {
         let ((mut min_x, mut min_y), (mut max_x, mut max_y)) = corners;
         if min_x > max_x {
@@ -243,52 +286,7 @@ impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
             for (ix, item) in item.iter_mut().enumerate().take(img_width) {
                 let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
                 let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
-
-                let particle = Particle::from(x, y, self.rules);
-
-                let value = match method {
-                    RasteriseMethod::Nearest => self.particles.get(&particle).cloned(),
-                    RasteriseMethod::IDW(strategy) => {
-                        let mut total_value: Option<T> = None;
-                        let mut tmp_weight = 0.0;
-                        let inside = Particle::from_inside_square(
-                            x,
-                            y,
-                            self.rules,
-                            strategy.sample_max_distance,
-                        );
-                        let particles_iter = inside
-                            .iter()
-                            .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
-                        for (other_particle, value) in particles_iter {
-                            let other_site = other_particle.site();
-                            let distance =
-                                ((x - other_site.0).powi(2) + (y - other_site.1).powi(2)).sqrt();
-                            if distance > strategy.sample_max_distance {
-                                continue;
-                            }
-                            if distance < strategy.sample_min_distance {
-                                total_value = Some(value.clone());
-                                break;
-                            }
-                            let weight = if let Some(smooth_power) = strategy.smooth_power {
-                                (1.0 - (distance / strategy.sample_max_distance).powf(smooth_power))
-                                    / distance.powf(strategy.weight_power)
-                            } else {
-                                distance.powf(-strategy.weight_power)
-                            };
-                            tmp_weight += weight;
-                            if let Some(total_value) = total_value.as_mut() {
-                                *total_value = total_value.lerp(value, weight / tmp_weight);
-                            } else {
-                                total_value = Some(value.clone());
-                            }
-                        }
-
-                        total_value
-                    }
-                };
-                *item = value;
+                *item = self.interpolate(x, y, rasterise_method);
             }
         }
 
@@ -307,7 +305,7 @@ impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp + Into<f64>> Partic
         corners: ((f64, f64), (f64, f64)),
         rasterise_scale: f64,
         thresholds: &[f64],
-        rasterise_method: RasteriseMethod,
+        rasterise_method: &RasteriseMethod,
         multi_thread: bool,
     ) -> Result<Vec<IsobandResult>, Box<dyn Error>> {
         let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;

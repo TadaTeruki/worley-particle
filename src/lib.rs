@@ -225,20 +225,20 @@ impl Particle {
 
     pub fn from(x: f64, y: f64, rules: GenerationRules) -> Self {
         let (ix, iy) = get_grid(x / rules.scale, y / rules.scale);
-        let wc = Self::new(ix, iy, rules);
-        let mut best_wc = wc;
-        let mut best_sqdist = square_distance(&(x, y), &wc.site());
+        let ptc = Self::new(ix, iy, rules);
+        let mut best_ptc = ptc;
+        let mut best_sqdist = square_distance(&(x, y), &ptc.site());
 
         for (nx, ny) in get_grids_around(ix, iy).iter() {
-            let wc = Self::new(*nx, *ny, rules);
-            let sqdist = square_distance(&(x, y), &wc.site());
+            let ptc = Self::new(*nx, *ny, rules);
+            let sqdist = square_distance(&(x, y), &ptc.site());
             if sqdist < best_sqdist {
-                best_wc = wc;
+                best_ptc = ptc;
                 best_sqdist = sqdist;
             }
         }
 
-        best_wc
+        best_ptc
     }
 
     pub fn hash_u64(&self) -> u64 {
@@ -268,9 +268,9 @@ impl Particle {
         let mut surroundings = Vec::new();
         for iy in corner_min_y..=corner_max_y {
             for ix in corner_min_x..=corner_max_x {
-                let wc = Self::new(ix, iy, rules);
-                if square_distance(&(x, y), &wc.site()) < radius.powi(2) {
-                    surroundings.push(wc);
+                let ptc = Self::new(ix, iy, rules);
+                if square_distance(&(x, y), &ptc.site()) < radius.powi(2) {
+                    surroundings.push(ptc);
                 }
             }
         }
@@ -467,14 +467,14 @@ mod test {
     fn test_calculate_voronoi() {
         let randomness = 0.9;
         let rules = GenerationRules::new(randomness, randomness, 1.0, 0).unwrap();
-        let wc = Particle::from(0.0, 0.0, rules);
-        let voronoi = wc.calculate_voronoi();
+        let ptc = Particle::from(0.0, 0.0, rules);
+        let voronoi = ptc.calculate_voronoi();
         assert_eq!(voronoi.polygon.len(), voronoi.neighbors.len());
 
         for i in 0..voronoi.neighbors.len() {
             let a = voronoi.neighbors[i].site();
             let b = voronoi.neighbors[(i + 1) % voronoi.neighbors.len()].site();
-            let c = wc.site();
+            let c = ptc.site();
             let center = circumcenter(&[&a, &b, &c]);
             assert!(square_distance(&center, &voronoi.polygon[i]) < 1e-9);
         }
@@ -492,8 +492,8 @@ mod test {
             let surroundings = Particle::from_inside_radius(point.0, point.1, rules, radius);
             for iy in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
                 for ix in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
-                    let wc = Particle::new(point.0 as i64 + ix, point.1 as i64 + iy, rules);
-                    if square_distance(&point, &wc.site()) < radius.powi(2) {
+                    let ptc = Particle::new(point.0 as i64 + ix, point.1 as i64 + iy, rules);
+                    if square_distance(&point, &ptc.site()) < radius.powi(2) {
                         count += 1;
                     }
                 }
