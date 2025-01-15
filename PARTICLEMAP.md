@@ -23,7 +23,7 @@ seed,min_randomness,max_randomness,scale
 
 ### Example
 
-```
+```plaintext:example.particlemap
 seed:150,min_randomness:0.5,max_randomness:0.8,scale:0.05
 [23.8,45.2]355.7,mountain,rocky
 [18.5,32.1]2.3,plain,grass
@@ -39,8 +39,7 @@ This library provides `ParticleMap` class to parse and handle the data.
 - Rastarisation
 - Vectorisation (using [contour-isobands-rs](https://crates.io/crates/contour-isobands))
 
-
-# Preview
+## Preview
 
 ![map-rasterise](data/output/map-rasterise.png)
 
