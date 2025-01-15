@@ -5,17 +5,17 @@ use contour_isobands::isobands;
 use crate::{GenerationRules, Particle};
 
 #[derive(Debug, Clone)]
-pub struct ParticleMap<T: ParticleMapAttribute> {
+pub struct ParticleMap<T: Debug + Clone + PartialEq> {
     rules: GenerationRules,
     particles: HashMap<Particle, T>,
 }
 
-pub trait ParticleMapAttribute: Debug + Clone + PartialEq {
+pub trait ParticleMapRWAttribute: Debug + Clone + PartialEq {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_string(&self) -> String;
 }
 
-pub trait ParticleMapAttributeLerp: ParticleMapAttribute {
+pub trait ParticleMapAttributeLerp: ParticleMapRWAttribute {
     fn lerp(&self, other: &Self, t: f64) -> Self;
 }
 
@@ -54,7 +54,7 @@ pub enum RasteriseMethod {
     IDW(IDWStrategy),
 }
 
-impl ParticleMapAttribute for f64 {
+impl ParticleMapRWAttribute for f64 {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         if let &[value] = s {
             Ok(value.parse()?)
@@ -74,7 +74,7 @@ impl ParticleMapAttributeLerp for f64 {
     }
 }
 
-impl ParticleMapAttribute for String {
+impl ParticleMapRWAttribute for String {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         Ok(s.join(","))
     }
@@ -84,11 +84,7 @@ impl ParticleMapAttribute for String {
     }
 }
 
-impl<T: ParticleMapAttribute> ParticleMap<T> {
-    pub fn new(rules: GenerationRules, particles: HashMap<Particle, T>) -> Self {
-        Self { rules, particles }
-    }
-
+impl<T: ParticleMapRWAttribute> ParticleMap<T> {
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
         let data = std::fs::read_to_string(file_path)?
             .lines()
@@ -169,6 +165,12 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
 
         Ok(())
     }
+}
+
+impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
+    pub fn new(rules: GenerationRules, particles: HashMap<Particle, T>) -> Self {
+        Self { rules, particles }
+    }
 
     pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
         let particle_sites = self
@@ -220,7 +222,7 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
     }
 }
 
-impl<T: ParticleMapAttribute + ParticleMapAttributeLerp> ParticleMap<T> {
+impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
     pub fn rasterise(
         &self,
         img_width: usize,
@@ -299,7 +301,7 @@ pub struct IsobandResult {
     pub polygons: Vec<Vec<(f64, f64)>>,
 }
 
-impl<T: ParticleMapAttribute + ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
+impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
     pub fn isobands(
         &self,
         corners: ((f64, f64), (f64, f64)),
@@ -400,7 +402,7 @@ mod tests {
         name: String,
     }
 
-    impl ParticleMapAttribute for TestAttribute {
+    impl ParticleMapRWAttribute for TestAttribute {
         fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
             if let &[value, name] = s {
                 Ok(Self {
