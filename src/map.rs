@@ -23,6 +23,10 @@ impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
         self.particles.keys().map(|cell| cell.site()).collect()
     }
 
+    pub fn rules(&self) -> &GenerationRules {
+        &self.rules
+    }
+
     pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
         let particle_sites = self
             .particles
