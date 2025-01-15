@@ -98,7 +98,7 @@ fn arg_cmp(a: (f64, f64), b: (f64, f64)) -> Ordering {
 }
 
 #[derive(Debug, Error)]
-pub enum WorleyError {
+pub enum GenerationRuleError {
     #[error("Invalid randomness (randomnesses are not in [0.0, 1.0], or min_randomness > max_randomness")]
     InvalidRandomness,
 
@@ -106,8 +106,9 @@ pub enum WorleyError {
     InvalidScale,
 }
 
+/// Rules for the generation of the Worley noise.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct WorleyParameters {
+pub struct GenerationRules {
     /// Minimum randomness of the feature point (in [0.0, 1.0]).
     /// randomness <= 0.5 is recommended for better performance and stability.
     min_randomness: f64,
@@ -120,7 +121,7 @@ pub struct WorleyParameters {
     seed: u64,
 }
 
-impl Hash for WorleyParameters {
+impl Hash for GenerationRules {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.min_randomness.to_bits().hash(state);
         self.max_randomness.to_bits().hash(state);
@@ -129,9 +130,9 @@ impl Hash for WorleyParameters {
     }
 }
 
-impl Eq for WorleyParameters {}
+impl Eq for GenerationRules {}
 
-impl Default for WorleyParameters {
+impl Default for GenerationRules {
     fn default() -> Self {
         Self {
             min_randomness: 0.5,
@@ -142,13 +143,13 @@ impl Default for WorleyParameters {
     }
 }
 
-impl WorleyParameters {
+impl GenerationRules {
     pub fn new(
         min_randomness: f64,
         max_randomness: f64,
         scale: f64,
         seed: u64,
-    ) -> Result<Self, WorleyError> {
+    ) -> Result<Self, GenerationRuleError> {
         Self::default()
             .set_randomness(min_randomness, max_randomness)?
             .set_scale(scale)?
@@ -159,24 +160,24 @@ impl WorleyParameters {
         mut self,
         min_randomness: f64,
         max_randomness: f64,
-    ) -> Result<Self, WorleyError> {
+    ) -> Result<Self, GenerationRuleError> {
         if min_randomness > max_randomness || min_randomness < 0.0 || max_randomness > 1.0 {
-            return Err(WorleyError::InvalidRandomness);
+            return Err(GenerationRuleError::InvalidRandomness);
         }
         self.min_randomness = min_randomness;
         self.max_randomness = max_randomness;
         Ok(self)
     }
 
-    pub fn set_scale(mut self, scale: f64) -> Result<Self, WorleyError> {
+    pub fn set_scale(mut self, scale: f64) -> Result<Self, GenerationRuleError> {
         if scale <= 0.0 {
-            return Err(WorleyError::InvalidScale);
+            return Err(GenerationRuleError::InvalidScale);
         }
         self.scale = scale;
         Ok(self)
     }
 
-    pub fn set_seed(mut self, seed: u64) -> Result<Self, WorleyError> {
+    pub fn set_seed(mut self, seed: u64) -> Result<Self, GenerationRuleError> {
         self.seed = seed;
         Ok(self)
     }
@@ -192,43 +193,43 @@ impl WorleyParameters {
 
 pub struct WorleyPolygon {
     pub polygon: Vec<(f64, f64)>,
-    pub neighbors: Vec<WorleyCell>,
+    pub neighbors: Vec<Particle>,
 }
 
-/// A cell of worley noise.
+/// A particle in the Worley noise.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct WorleyCell {
+pub struct Particle {
     /// (x, y) coordinate of the grid.
     grid: (i64, i64),
-    /// parameter for worley noise.
-    parameters: WorleyParameters,
+    /// rule of the generation.
+    rules: GenerationRules,
 }
 
-impl Hash for WorleyCell {
+impl Hash for Particle {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.grid.hash(state);
-        self.parameters.hash(state);
+        self.rules.hash(state);
     }
 }
 
-impl Eq for WorleyCell {}
+impl Eq for Particle {}
 
-impl WorleyCell {
-    pub fn new(grid_x: i64, grid_y: i64, parameters: WorleyParameters) -> Self {
+impl Particle {
+    pub fn new(grid_x: i64, grid_y: i64, rules: GenerationRules) -> Self {
         Self {
             grid: (grid_x, grid_y),
-            parameters,
+            rules,
         }
     }
 
-    pub fn from(x: f64, y: f64, parameters: WorleyParameters) -> Self {
-        let (ix, iy) = get_grid(x / parameters.scale, y / parameters.scale);
-        let wc = Self::new(ix, iy, parameters);
+    pub fn from(x: f64, y: f64, rules: GenerationRules) -> Self {
+        let (ix, iy) = get_grid(x / rules.scale, y / rules.scale);
+        let wc = Self::new(ix, iy, rules);
         let mut best_wc = wc;
         let mut best_sqdist = square_distance(&(x, y), &wc.site());
 
         for (nx, ny) in get_grids_around(ix, iy).iter() {
-            let wc = Self::new(*nx, *ny, parameters);
+            let wc = Self::new(*nx, *ny, rules);
             let sqdist = square_distance(&(x, y), &wc.site());
             if sqdist < best_sqdist {
                 best_wc = wc;
@@ -247,35 +248,26 @@ impl WorleyCell {
 
     pub fn site(&self) -> (f64, f64) {
         let rel_core = site_point_from_hash(
-            hash_2d(self.grid.0, self.grid.1, self.parameters.seed),
-            self.parameters.min_randomness,
-            self.parameters.max_randomness,
+            hash_2d(self.grid.0, self.grid.1, self.rules.seed),
+            self.rules.min_randomness,
+            self.rules.max_randomness,
         );
         (
-            (self.grid.0 as f64 + rel_core.0) * self.parameters.scale,
-            (self.grid.1 as f64 + rel_core.1) * self.parameters.scale,
+            (self.grid.0 as f64 + rel_core.0) * self.rules.scale,
+            (self.grid.1 as f64 + rel_core.1) * self.rules.scale,
         )
     }
 
-    pub fn from_inside_radius(
-        x: f64,
-        y: f64,
-        parameters: WorleyParameters,
-        radius: f64,
-    ) -> Vec<Self> {
-        let (corner_min_x, corner_min_y) = get_grid(
-            (x - radius) / parameters.scale,
-            (y - radius) / parameters.scale,
-        );
-        let (corner_max_x, corner_max_y) = get_grid(
-            (x + radius) / parameters.scale,
-            (y + radius) / parameters.scale,
-        );
+    pub fn from_inside_radius(x: f64, y: f64, rules: GenerationRules, radius: f64) -> Vec<Self> {
+        let (corner_min_x, corner_min_y) =
+            get_grid((x - radius) / rules.scale, (y - radius) / rules.scale);
+        let (corner_max_x, corner_max_y) =
+            get_grid((x + radius) / rules.scale, (y + radius) / rules.scale);
 
         let mut surroundings = Vec::new();
         for iy in corner_min_y..=corner_max_y {
             for ix in corner_min_x..=corner_max_x {
-                let wc = Self::new(ix, iy, parameters);
+                let wc = Self::new(ix, iy, rules);
                 if square_distance(&(x, y), &wc.site()) < radius.powi(2) {
                     surroundings.push(wc);
                 }
@@ -285,21 +277,16 @@ impl WorleyCell {
         surroundings
     }
 
-    pub fn from_inside_square(
-        x: f64,
-        y: f64,
-        parameters: WorleyParameters,
-        side: f64,
-    ) -> Vec<Self> {
+    pub fn from_inside_square(x: f64, y: f64, rules: GenerationRules, side: f64) -> Vec<Self> {
         let (corner_min_x, corner_min_y) =
-            get_grid((x - side) / parameters.scale, (y - side) / parameters.scale);
+            get_grid((x - side) / rules.scale, (y - side) / rules.scale);
         let (corner_max_x, corner_max_y) =
-            get_grid((x + side) / parameters.scale, (y + side) / parameters.scale);
+            get_grid((x + side) / rules.scale, (y + side) / rules.scale);
 
         let mut surroundings = Vec::new();
         for iy in corner_min_y..=corner_max_y {
             for ix in corner_min_x..=corner_max_x {
-                surroundings.push(Self::new(ix, iy, parameters));
+                surroundings.push(Self::new(ix, iy, rules));
             }
         }
 
@@ -312,13 +299,13 @@ impl WorleyCell {
         let (ix, iy) = (self.grid.0, self.grid.1);
 
         // little bit complicated logic for large max_randomness
-        let wide = self.parameters.max_randomness > 0.5;
+        let wide = self.rules.max_randomness > 0.5;
 
         let (mut around_sites, mut around_grids) = if wide {
             let around_grids = get_grids_wide_around(ix, iy);
             let around_sites = around_grids
                 .iter()
-                .map(|&x| Self::new(x.0, x.1, self.parameters).site())
+                .map(|&x| Self::new(x.0, x.1, self.rules).site())
                 .collect::<Vec<(f64, f64)>>();
 
             let mut idx = (0..around_sites.len())
@@ -342,7 +329,7 @@ impl WorleyCell {
             let mut around_sites = vec![(0.0, 0.0); 8];
             for i in 0..around_grids.len() {
                 around_sites[i] =
-                    Self::new(around_grids[i].0, around_grids[i].1, self.parameters).site();
+                    Self::new(around_grids[i].0, around_grids[i].1, self.rules).site();
             }
             (around_sites, around_grids.to_vec())
         };
@@ -405,7 +392,7 @@ impl WorleyCell {
             polygon: centers,
             neighbors: around_grids
                 .iter()
-                .map(|&x| Self::new(x.0, x.1, self.parameters))
+                .map(|&x| Self::new(x.0, x.1, self.rules))
                 .collect(),
         }
     }
@@ -478,8 +465,8 @@ mod test {
     #[test]
     fn test_calculate_voronoi() {
         let randomness = 0.9;
-        let params = WorleyParameters::new(randomness, randomness, 1.0, 0).unwrap();
-        let wc = WorleyCell::from(0.0, 0.0, params);
+        let rules = GenerationRules::new(randomness, randomness, 1.0, 0).unwrap();
+        let wc = Particle::from(0.0, 0.0, rules);
         let voronoi = wc.calculate_voronoi();
         assert_eq!(voronoi.polygon.len(), voronoi.neighbors.len());
 
@@ -498,13 +485,13 @@ mod test {
             let mut rng = StdRng::from_seed([seed; 32]);
             let point: (f64, f64) = (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0));
             let randomness: f64 = rng.gen_range(0.0..0.9);
-            let params = WorleyParameters::new(randomness, randomness, 1.0, 0).unwrap();
+            let rules = GenerationRules::new(randomness, randomness, 1.0, 0).unwrap();
             let radius: f64 = rng.gen_range(0.0..100.0);
             let mut count = 0;
-            let surroundings = WorleyCell::from_inside_radius(point.0, point.1, params, radius);
+            let surroundings = Particle::from_inside_radius(point.0, point.1, rules, radius);
             for iy in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
                 for ix in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
-                    let wc = WorleyCell::new(point.0 as i64 + ix, point.1 as i64 + iy, params);
+                    let wc = Particle::new(point.0 as i64 + ix, point.1 as i64 + iy, rules);
                     if square_distance(&point, &wc.site()) < radius.powi(2) {
                         count += 1;
                     }

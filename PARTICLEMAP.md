@@ -1,12 +1,21 @@
-# worleyMap
+# particlemap
 
 Data format parser and handler for particle-based data which coordinates of particles are defined as sites of Worley noise.
+
+## How to use
+
+Enable the feature `particlemap` in your `Cargo.toml`.
+
+```toml
+[dependencies]
+worley-particle = { ..., features = ["particlemap"] }
+```
 
 ## Format Specification
 
 `x` and `y` is the sites of each particle.
 
-```plaintext:example.worleymap
+```plaintext:example.particlemap
 seed,min_randomness,max_randomness,scale
 [{x},{y}]{other data}
 ...
@@ -23,7 +32,7 @@ seed:150,min_randomness:0.5,max_randomness:0.8,scale:0.05
 
 ## Features
 
-This library provides `WorleyMap` class to parse and handle the data.
+This library provides `ParticleMap` class to parse and handle the data.
 
 - Read data from file
 - Interpolation

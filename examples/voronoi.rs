@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use pworley::{WorleyCell, WorleyParameters};
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
+use worley_particle::{GenerationRules, Particle};
 
 fn main() {
     let image_width = 500;
@@ -18,20 +18,20 @@ fn main() {
             let x = min_x + (max_x - min_x) * (ix as f64 / image_width as f64);
             let y = min_y + (max_y - min_y) * (iy as f64 / image_height as f64);
 
-            let params = WorleyParameters::new(0.8, 0.8, 0.1, 0).unwrap();
-            let wc = WorleyCell::from(x, y, params);
-            if cells.contains(&wc) {
+            let rules = GenerationRules::new(0.8, 0.8, 0.1, 0).unwrap();
+            let ptc = Particle::from(x, y, rules);
+            if cells.contains(&ptc) {
                 continue;
             }
-            cells.insert(wc);
-            let voronoi = wc.calculate_voronoi().polygon;
+            cells.insert(ptc);
+            let voronoi = ptc.calculate_voronoi().polygon;
 
             if voronoi.len() < 3 {
                 continue;
             }
 
             let mut paint = Paint::default();
-            let hash = wc.hash_u64();
+            let hash = ptc.hash_u64();
             let r = (hash % 256) as u8;
             let g = (hash / 256 % 256) as u8;
             let b = (hash / 65536 % 256) as u8;

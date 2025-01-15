@@ -620,17 +620,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pworley"
-version = "0.1.0"
-dependencies = [
- "contour-isobands",
- "image",
- "rand",
- "thiserror 2.0.9",
- "tiny-skia",
-]
-
-[[package]]
 name = "qoi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1065,6 +1054,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36c1fec1a2bb5866f07c25f68c26e565c4c200aebb96d7e55710c19d3e8ac49b"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "worley-particle"
+version = "0.1.0"
+dependencies = [
+ "contour-isobands",
+ "image",
+ "rand",
+ "thiserror 2.0.9",
+ "tiny-skia",
 ]
 
 [[package]]

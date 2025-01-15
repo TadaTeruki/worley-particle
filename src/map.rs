@@ -2,20 +2,20 @@ use std::{collections::HashMap, error::Error, fmt::Debug};
 
 use contour_isobands::isobands;
 
-use crate::{WorleyCell, WorleyParameters};
+use crate::{GenerationRules, Particle};
 
 #[derive(Debug, Clone)]
-pub struct WorleyMap<T: WorleyMapAttribute> {
-    parameters: WorleyParameters,
-    particles: HashMap<WorleyCell, T>,
+pub struct ParticleMap<T: ParticleMapAttribute> {
+    rules: GenerationRules,
+    particles: HashMap<Particle, T>,
 }
 
-pub trait WorleyMapAttribute: Debug + Clone + PartialEq {
+pub trait ParticleMapAttribute: Debug + Clone + PartialEq {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_string(&self) -> String;
 }
 
-pub trait WorleyMapAttributeLerp: WorleyMapAttribute {
+pub trait ParticleMapAttributeLerp: ParticleMapAttribute {
     fn lerp(&self, other: &Self, t: f64) -> Self;
 }
 
@@ -28,10 +28,10 @@ pub struct IDWStrategy {
 }
 
 impl IDWStrategy {
-    pub fn default_from_parameters(parameters: &WorleyParameters) -> Self {
+    pub fn default_from_rules(rules: &GenerationRules) -> Self {
         Self {
-            sample_min_distance: parameters.scale * 1e-6,
-            sample_max_distance: parameters.scale * 1.415,
+            sample_min_distance: rules.scale * 1e-6,
+            sample_max_distance: rules.scale * 1.415,
             weight_power: 1.5,
             smooth_power: Some(1.0),
         }
@@ -43,7 +43,7 @@ impl Default for IDWStrategy {
         Self {
             sample_min_distance: 1e-6,
             sample_max_distance: f64::INFINITY,
-            weight_power: 1.0,
+            weight_power: 1.5,
             smooth_power: Some(1.0),
         }
     }
@@ -54,7 +54,7 @@ pub enum RasteriseMethod {
     IDW(IDWStrategy),
 }
 
-impl WorleyMapAttribute for f64 {
+impl ParticleMapAttribute for f64 {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         if let &[value] = s {
             Ok(value.parse()?)
@@ -68,13 +68,13 @@ impl WorleyMapAttribute for f64 {
     }
 }
 
-impl WorleyMapAttributeLerp for f64 {
+impl ParticleMapAttributeLerp for f64 {
     fn lerp(&self, other: &Self, t: f64) -> Self {
         self + (other - self) * t
     }
 }
 
-impl WorleyMapAttribute for String {
+impl ParticleMapAttribute for String {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         Ok(s.join(","))
     }
@@ -84,12 +84,9 @@ impl WorleyMapAttribute for String {
     }
 }
 
-impl<T: WorleyMapAttribute> WorleyMap<T> {
-    pub fn new(parameters: WorleyParameters, particles: HashMap<WorleyCell, T>) -> Self {
-        Self {
-            parameters,
-            particles,
-        }
+impl<T: ParticleMapAttribute> ParticleMap<T> {
+    pub fn new(rules: GenerationRules, particles: HashMap<Particle, T>) -> Self {
+        Self { rules, particles }
     }
 
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
@@ -102,7 +99,7 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
     }
 
     pub fn read_from_lines(data: Vec<String>) -> Result<Self, Box<dyn Error>> {
-        let mut parameters = WorleyParameters::default();
+        let mut rules = GenerationRules::default();
 
         let mut raw_particles: Vec<(f64, f64)> = Vec::new();
         let mut other_data: Vec<T> = Vec::new();
@@ -116,10 +113,10 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
                     let key = iter.next().unwrap();
                     let value = iter.next().unwrap();
                     match key {
-                        "seed" => parameters.seed = value.parse().unwrap(),
-                        "min_randomness" => parameters.min_randomness = value.parse().unwrap(),
-                        "max_randomness" => parameters.max_randomness = value.parse().unwrap(),
-                        "scale" => parameters.scale = value.parse().unwrap(),
+                        "seed" => rules.seed = value.parse().unwrap(),
+                        "min_randomness" => rules.min_randomness = value.parse().unwrap(),
+                        "max_randomness" => rules.max_randomness = value.parse().unwrap(),
+                        "scale" => rules.scale = value.parse().unwrap(),
                         _ => panic!("Unknown key: {}", key),
                     }
                 }
@@ -144,15 +141,12 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
             .map(|((x, y), other_data)| {
                 let x = *x;
                 let y = *y;
-                let particle = WorleyCell::from(x, y, parameters);
+                let particle = Particle::from(x, y, rules);
                 (particle, other_data.clone())
             })
             .collect::<HashMap<_, _>>();
 
-        Ok(Self {
-            parameters,
-            particles,
-        })
+        Ok(Self { rules, particles })
     }
 
     pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
@@ -160,20 +154,10 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
 
         data.push(format!(
             "seed:{},min_randomness:{},max_randomness:{},scale:{}",
-            self.particles.keys().next().unwrap().parameters.seed,
-            self.particles
-                .keys()
-                .next()
-                .unwrap()
-                .parameters
-                .min_randomness,
-            self.particles
-                .keys()
-                .next()
-                .unwrap()
-                .parameters
-                .max_randomness,
-            self.particles.keys().next().unwrap().parameters.scale
+            self.particles.keys().next().unwrap().rules.seed,
+            self.particles.keys().next().unwrap().rules.min_randomness,
+            self.particles.keys().next().unwrap().rules.max_randomness,
+            self.particles.keys().next().unwrap().rules.scale
         ));
 
         for (particle, other_data) in self.particles.iter() {
@@ -236,7 +220,7 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
     }
 }
 
-impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
+impl<T: ParticleMapAttribute + ParticleMapAttributeLerp> ParticleMap<T> {
     pub fn rasterise(
         &self,
         img_width: usize,
@@ -258,17 +242,17 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
                 let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
                 let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
 
-                let particle = WorleyCell::from(x, y, self.parameters);
+                let particle = Particle::from(x, y, self.rules);
 
                 let value = match method {
                     RasteriseMethod::Nearest => self.particles.get(&particle).cloned(),
                     RasteriseMethod::IDW(strategy) => {
                         let mut total_value: Option<T> = None;
                         let mut tmp_weight = 0.0;
-                        let inside = WorleyCell::from_inside_square(
+                        let inside = Particle::from_inside_square(
                             x,
                             y,
-                            self.parameters,
+                            self.rules,
                             strategy.sample_max_distance,
                         );
                         let particles_iter = inside
@@ -315,7 +299,7 @@ pub struct IsobandResult {
     pub polygons: Vec<Vec<(f64, f64)>>,
 }
 
-impl<T: WorleyMapAttribute + WorleyMapAttributeLerp + Into<f64>> WorleyMap<T> {
+impl<T: ParticleMapAttribute + ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
     pub fn isobands(
         &self,
         corners: ((f64, f64), (f64, f64)),
@@ -326,7 +310,7 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp + Into<f64>> WorleyMap<T> {
     ) -> Result<Vec<IsobandResult>, Box<dyn Error>> {
         let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;
 
-        let expansion = rasterise_scale * self.parameters.scale;
+        let expansion = rasterise_scale * self.rules.scale;
 
         let raster_min_x = (original_min_x * expansion).floor() as i64;
         let raster_max_x = (original_max_x * expansion).ceil() as i64;
@@ -416,7 +400,7 @@ mod tests {
         name: String,
     }
 
-    impl WorleyMapAttribute for TestAttribute {
+    impl ParticleMapAttribute for TestAttribute {
         fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
             if let &[value, name] = s {
                 Ok(Self {
@@ -435,29 +419,29 @@ mod tests {
 
     #[test]
     fn test_read_from_file() {
-        let map = WorleyMap::<TestAttribute>::read_from_file("data/sample.worleymap").unwrap();
+        let map = ParticleMap::<TestAttribute>::read_from_file("data/sample.particlemap").unwrap();
 
         assert_eq!(map.particles.len(), 3);
     }
 
     #[test]
     fn test_validate_read_and_write() {
-        let parameters = WorleyParameters {
+        let rules = GenerationRules {
             seed: 0,
             min_randomness: 0.2,
             max_randomness: 0.5,
             scale: 0.1,
         };
-        let cells = WorleyCell::from_inside_radius(0.0, 0.0, parameters, 10.0);
+        let cells = Particle::from_inside_radius(0.0, 0.0, rules, 10.0);
         let values = cells
             .iter()
             .map(|cell| (cell.hash_u64() % 10) as f64)
             .collect::<Vec<_>>();
-        let map = WorleyMap::new(parameters, cells.into_iter().zip(values).collect());
+        let map = ParticleMap::new(rules, cells.into_iter().zip(values).collect());
 
-        map.write_to_file("data/output/out.worleymap").unwrap();
+        map.write_to_file("data/output/out.particlemap").unwrap();
 
-        let map2 = WorleyMap::<f64>::read_from_file("data/output/out.worleymap").unwrap();
+        let map2 = ParticleMap::<f64>::read_from_file("data/output/out.particlemap").unwrap();
 
         assert!(map.is_same(&map2));
     }
