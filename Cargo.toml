@@ -8,5 +8,6 @@ image = "0.25.5"
 tiny-skia = "0.11.4"
 
 [dependencies]
+contour-isobands = { version = "0.4.3", features =  ["parallel"] }
 rand = "0.8.5"
 thiserror = "2.0.9"

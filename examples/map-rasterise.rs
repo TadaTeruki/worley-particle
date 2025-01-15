@@ -1,10 +1,10 @@
 use pworley::{
-    map::{IDWStrategy, RasterizationMethod, WorleyMap},
+    map::{IDWStrategy, RasteriseMethod, WorleyMap},
     WorleyCell, WorleyParameters,
 };
 
 fn main() {
-    let parameters = WorleyParameters::new(0.8, 0.8, 1.0, 0).unwrap();
+    let parameters = WorleyParameters::new(0.8, 0.8, 0.5, 0).unwrap();
     let cells = WorleyCell::from_inside_radius(0.0, 0.0, parameters, 5.0);
     let values = cells
         .iter()
@@ -19,8 +19,8 @@ fn main() {
     let raster = map.rasterise(
         image_width,
         image_height,
-        ((-5.0, -5.0), (5.0, 5.0)),
-        RasterizationMethod::IDW(IDWStrategy::default_from_parameters(&parameters)),
+        map.corners(),
+        RasteriseMethod::IDW(IDWStrategy::default_from_parameters(&parameters)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);

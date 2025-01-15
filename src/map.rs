@@ -1,5 +1,7 @@
 use std::{collections::HashMap, error::Error, fmt::Debug};
 
+use contour_isobands::isobands;
+
 use crate::{WorleyCell, WorleyParameters};
 
 #[derive(Debug, Clone)]
@@ -47,7 +49,7 @@ impl Default for IDWStrategy {
     }
 }
 
-pub enum RasterizationMethod {
+pub enum RasteriseMethod {
     Nearest,
     IDW(IDWStrategy),
 }
@@ -184,6 +186,36 @@ impl<T: WorleyMapAttribute> WorleyMap<T> {
         Ok(())
     }
 
+    pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
+        let particle_sites = self
+            .particles
+            .keys()
+            .map(|cell| cell.site())
+            .collect::<Vec<_>>();
+
+        let min_x = particle_sites
+            .iter()
+            .map(|(x, _)| *x)
+            .fold(f64::MAX, |acc, x| acc.min(x));
+
+        let max_x = particle_sites
+            .iter()
+            .map(|(x, _)| *x)
+            .fold(f64::MIN, |acc, x| acc.max(x));
+
+        let min_y = particle_sites
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::MAX, |acc, y| acc.min(y));
+
+        let max_y = particle_sites
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::MIN, |acc, y| acc.max(y));
+
+        ((min_x, min_y), (max_x, max_y))
+    }
+
     #[allow(dead_code)]
     fn is_same(&self, other: &Self) -> bool {
         if self.particles.len() != other.particles.len() {
@@ -210,7 +242,7 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
         img_width: usize,
         img_height: usize,
         corners: ((f64, f64), (f64, f64)),
-        method: RasterizationMethod,
+        method: RasteriseMethod,
     ) -> Vec<Vec<Option<T>>> {
         let ((mut min_x, mut min_y), (mut max_x, mut max_y)) = corners;
         if min_x > max_x {
@@ -229,8 +261,8 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
                 let particle = WorleyCell::from(x, y, self.parameters);
 
                 let value = match method {
-                    RasterizationMethod::Nearest => self.particles.get(&particle).cloned(),
-                    RasterizationMethod::IDW(strategy) => {
+                    RasteriseMethod::Nearest => self.particles.get(&particle).cloned(),
+                    RasteriseMethod::IDW(strategy) => {
                         let mut total_value: Option<T> = None;
                         let mut tmp_weight = 0.0;
                         let inside = WorleyCell::from_inside_square(
@@ -275,6 +307,102 @@ impl<T: WorleyMapAttribute + WorleyMapAttributeLerp> WorleyMap<T> {
         }
 
         raster
+    }
+}
+
+pub struct IsobandResult {
+    pub threshold: f64,
+    pub polygons: Vec<Vec<(f64, f64)>>,
+}
+
+impl<T: WorleyMapAttribute + WorleyMapAttributeLerp + Into<f64>> WorleyMap<T> {
+    pub fn isobands(
+        &self,
+        corners: ((f64, f64), (f64, f64)),
+        rasterise_scale: f64,
+        thresholds: &[f64],
+        rasterise_method: RasteriseMethod,
+        multi_thread: bool,
+    ) -> Result<Vec<IsobandResult>, Box<dyn Error>> {
+        let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;
+
+        let expansion = rasterise_scale * self.parameters.scale;
+
+        let raster_min_x = (original_min_x * expansion).floor() as i64;
+        let raster_max_x = (original_max_x * expansion).ceil() as i64;
+        let raster_min_y = (original_min_y * expansion).floor() as i64;
+        let raster_max_y = (original_max_y * expansion).ceil() as i64;
+
+        let domain_min_x = raster_min_x as f64 / expansion;
+        let domain_max_x = raster_max_x as f64 / expansion;
+        let domain_min_y = raster_min_y as f64 / expansion;
+        let domain_max_y = raster_max_y as f64 / expansion;
+
+        let width = (raster_max_x - raster_min_x) as usize;
+        let height = (raster_max_y - raster_min_y) as usize;
+        let raster = self.rasterise(
+            width,
+            height,
+            ((domain_min_x, domain_min_y), (domain_max_x, domain_max_y)),
+            rasterise_method,
+        );
+
+        let raster_f64 = raster
+            .iter()
+            .flat_map(|row| {
+                row.iter()
+                    .map(|value: &Option<T>| {
+                        if let Some(value) = value {
+                            value.clone().into()
+                        } else {
+                            f64::MIN
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let res_raster = isobands(
+            &raster_f64,
+            thresholds,
+            multi_thread,
+            width,
+            height,
+            multi_thread,
+        );
+        if let Err(e) = res_raster {
+            return Err(e.to_string().into());
+        }
+
+        let res_domain = res_raster
+            .unwrap()
+            .iter()
+            .map(|band| {
+                let threshold = band.1;
+                let polygons = band
+                    .0
+                    .iter()
+                    .map(|polygon| {
+                        polygon
+                            .iter()
+                            .map(|point| {
+                                let x = (point.x() / width as f64) * (domain_max_x - domain_min_x)
+                                    + domain_min_x;
+                                let y = (point.y() / height as f64) * (domain_max_y - domain_min_y)
+                                    + domain_min_y;
+                                (x, y)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                IsobandResult {
+                    threshold,
+                    polygons,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(res_domain)
     }
 }
 
