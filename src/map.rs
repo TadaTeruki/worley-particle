@@ -10,51 +10,75 @@ pub struct ParticleMap<T: Debug + Clone + PartialEq> {
     particles: HashMap<Particle, T>,
 }
 
-pub trait ParticleMapRWAttribute: Debug + Clone + PartialEq {
+impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
+    pub fn new(rules: GenerationRules, particles: HashMap<Particle, T>) -> Self {
+        Self { rules, particles }
+    }
+
+    pub fn as_hash_map(&self) -> &HashMap<Particle, T> {
+        &self.particles
+    }
+
+    pub fn sites(&self) -> Vec<(f64, f64)> {
+        self.particles.keys().map(|cell| cell.site()).collect()
+    }
+
+    pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
+        let particle_sites = self
+            .particles
+            .keys()
+            .map(|cell| cell.site())
+            .collect::<Vec<_>>();
+
+        let min_x = particle_sites
+            .iter()
+            .map(|(x, _)| *x)
+            .fold(f64::MAX, |acc, x| acc.min(x));
+
+        let max_x = particle_sites
+            .iter()
+            .map(|(x, _)| *x)
+            .fold(f64::MIN, |acc, x| acc.max(x));
+
+        let min_y = particle_sites
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::MAX, |acc, y| acc.min(y));
+
+        let max_y = particle_sites
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::MIN, |acc, y| acc.max(y));
+
+        ((min_x, min_y), (max_x, max_y))
+    }
+
+    #[allow(dead_code)]
+    fn is_same(&self, other: &Self) -> bool {
+        if self.particles.len() != other.particles.len() {
+            return false;
+        }
+
+        for (particle, value) in self.particles.iter() {
+            if let Some(other_value) = other.particles.get(particle) {
+                if value != other_value {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+pub trait ParticleMapAttributeRW: Debug + Clone + PartialEq {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_string(&self) -> String;
 }
 
-pub trait ParticleMapAttributeLerp: ParticleMapRWAttribute {
-    fn lerp(&self, other: &Self, t: f64) -> Self;
-}
-
-#[derive(Debug, Clone, PartialEq, Copy)]
-pub struct IDWStrategy {
-    pub sample_min_distance: f64,
-    pub sample_max_distance: f64,
-    pub weight_power: f64,
-    pub smooth_power: Option<f64>,
-}
-
-impl IDWStrategy {
-    pub fn default_from_rules(rules: &GenerationRules) -> Self {
-        Self {
-            sample_min_distance: rules.scale * 1e-6,
-            sample_max_distance: rules.scale * 1.415,
-            weight_power: 1.5,
-            smooth_power: Some(1.0),
-        }
-    }
-}
-
-impl Default for IDWStrategy {
-    fn default() -> Self {
-        Self {
-            sample_min_distance: 1e-6,
-            sample_max_distance: f64::INFINITY,
-            weight_power: 1.5,
-            smooth_power: Some(1.0),
-        }
-    }
-}
-
-pub enum RasteriseMethod {
-    Nearest,
-    IDW(IDWStrategy),
-}
-
-impl ParticleMapRWAttribute for f64 {
+impl ParticleMapAttributeRW for f64 {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         if let &[value] = s {
             Ok(value.parse()?)
@@ -68,13 +92,7 @@ impl ParticleMapRWAttribute for f64 {
     }
 }
 
-impl ParticleMapAttributeLerp for f64 {
-    fn lerp(&self, other: &Self, t: f64) -> Self {
-        self + (other - self) * t
-    }
-}
-
-impl ParticleMapRWAttribute for String {
+impl ParticleMapAttributeRW for String {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         Ok(s.join(","))
     }
@@ -84,7 +102,7 @@ impl ParticleMapRWAttribute for String {
     }
 }
 
-impl<T: ParticleMapRWAttribute> ParticleMap<T> {
+impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
         let data = std::fs::read_to_string(file_path)?
             .lines()
@@ -167,59 +185,49 @@ impl<T: ParticleMapRWAttribute> ParticleMap<T> {
     }
 }
 
-impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
-    pub fn new(rules: GenerationRules, particles: HashMap<Particle, T>) -> Self {
-        Self { rules, particles }
+pub trait ParticleMapAttributeLerp: ParticleMapAttributeRW {
+    fn lerp(&self, other: &Self, t: f64) -> Self;
+}
+
+impl ParticleMapAttributeLerp for f64 {
+    fn lerp(&self, other: &Self, t: f64) -> Self {
+        self + (other - self) * t
     }
+}
 
-    pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
-        let particle_sites = self
-            .particles
-            .keys()
-            .map(|cell| cell.site())
-            .collect::<Vec<_>>();
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct IDWStrategy {
+    pub sample_min_distance: f64,
+    pub sample_max_distance: f64,
+    pub weight_power: f64,
+    pub smooth_power: Option<f64>,
+}
 
-        let min_x = particle_sites
-            .iter()
-            .map(|(x, _)| *x)
-            .fold(f64::MAX, |acc, x| acc.min(x));
-
-        let max_x = particle_sites
-            .iter()
-            .map(|(x, _)| *x)
-            .fold(f64::MIN, |acc, x| acc.max(x));
-
-        let min_y = particle_sites
-            .iter()
-            .map(|(_, y)| *y)
-            .fold(f64::MAX, |acc, y| acc.min(y));
-
-        let max_y = particle_sites
-            .iter()
-            .map(|(_, y)| *y)
-            .fold(f64::MIN, |acc, y| acc.max(y));
-
-        ((min_x, min_y), (max_x, max_y))
-    }
-
-    #[allow(dead_code)]
-    fn is_same(&self, other: &Self) -> bool {
-        if self.particles.len() != other.particles.len() {
-            return false;
+impl IDWStrategy {
+    pub fn default_from_rules(rules: &GenerationRules) -> Self {
+        Self {
+            sample_min_distance: rules.scale * 1e-6,
+            sample_max_distance: rules.scale * 1.415,
+            weight_power: 1.5,
+            smooth_power: Some(1.0),
         }
-
-        for (particle, value) in self.particles.iter() {
-            if let Some(other_value) = other.particles.get(particle) {
-                if value != other_value {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-
-        true
     }
+}
+
+impl Default for IDWStrategy {
+    fn default() -> Self {
+        Self {
+            sample_min_distance: 1e-6,
+            sample_max_distance: f64::INFINITY,
+            weight_power: 1.5,
+            smooth_power: Some(1.0),
+        }
+    }
+}
+
+pub enum RasteriseMethod {
+    Nearest,
+    IDW(IDWStrategy),
 }
 
 impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
@@ -400,7 +408,7 @@ mod tests {
         name: String,
     }
 
-    impl ParticleMapRWAttribute for TestAttribute {
+    impl ParticleMapAttributeRW for TestAttribute {
         fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
             if let &[value, name] = s {
                 Ok(Self {
