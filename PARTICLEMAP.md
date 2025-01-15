@@ -35,6 +35,13 @@ seed:150,min_randomness:0.5,max_randomness:0.8,scale:0.05
 This library provides `ParticleMap` class to parse and handle the data.
 
 - Read data from file
-- Interpolation
+- Interpolation (Nearest, IDW)
 - Rastarisation
 - Vectorisation (using [contour-isobands-rs](https://crates.io/crates/contour-isobands))
+
+
+# Preview
+
+![map-rasterise](data/output/map-rasterise.png)
+
+![map-isobands](data/output/map-isobands.png)

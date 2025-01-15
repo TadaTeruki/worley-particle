@@ -23,5 +23,5 @@ fn main() {
         }
     }
 
-    image_buf.save("out/image.png").unwrap();
+    image_buf.save("data/output/tile.png").unwrap();
 }

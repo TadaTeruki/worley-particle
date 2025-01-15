@@ -63,5 +63,5 @@ fn main() {
             pixmap.stroke_path(&path.unwrap(), &paint, &stroke, Transform::identity(), None);
         }
     }
-    pixmap.save_png("out/image.png").unwrap();
+    pixmap.save_png("data/output/voronoi.png").unwrap();
 }

@@ -17,7 +17,7 @@ And optionally:
 
 # Preview
 
-![tile](images/tile.png)
+![tile](data/output/tile.png)
 
-![voronoi](images/voronoi.png)
+![voronoi](data/output/voronoi.png)
 
