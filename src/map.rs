@@ -4,13 +4,16 @@ use contour_isobands::isobands;
 
 use crate::{Particle, ParticleParameters};
 
+pub trait ParticleMapAttribute: Debug + Clone + PartialEq {}
+impl<T: Debug + Clone + PartialEq> ParticleMapAttribute for T {}
+
 #[derive(Debug, Clone)]
-pub struct ParticleMap<T: Debug + Clone + PartialEq> {
+pub struct ParticleMap<T: ParticleMapAttribute> {
     params: ParticleParameters,
     particles: HashMap<Particle, T>,
 }
 
-impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
+impl<T: ParticleMapAttribute> ParticleMap<T> {
     pub fn new(params: ParticleParameters, particles: HashMap<Particle, T>) -> Self {
         Self { params, particles }
     }
@@ -77,7 +80,7 @@ impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
     }
 }
 
-pub trait ParticleMapAttributeRW: Debug + Clone + PartialEq {
+pub trait ParticleMapAttributeRW: ParticleMapAttribute {
     fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_string(&self) -> String;
 }
@@ -189,7 +192,7 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     }
 }
 
-pub trait ParticleMapAttributeLerp: ParticleMapAttributeRW {
+pub trait ParticleMapAttributeLerp: ParticleMapAttribute {
     fn lerp(&self, other: &Self, t: f64) -> Self;
 }
 
@@ -234,7 +237,7 @@ pub enum RasteriseMethod {
     IDW(IDWStrategy),
 }
 
-impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
+impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
     pub fn get_value(&self, x: f64, y: f64, method: &RasteriseMethod) -> Option<T> {
         match method {
             RasteriseMethod::Nearest => {
@@ -311,7 +314,7 @@ pub struct IsobandResult {
     pub polygons: Vec<Vec<(f64, f64)>>,
 }
 
-impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
+impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
     pub fn isobands(
         &self,
         corners: ((f64, f64), (f64, f64)),
