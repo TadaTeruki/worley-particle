@@ -109,6 +109,16 @@ impl ParticleMapAttributeRW for String {
     }
 }
 
+impl ParticleMapAttributeRW for () {
+    fn from_str(_: &[&str]) -> Result<Self, Box<dyn Error>> {
+        Ok(())
+    }
+
+    fn to_string(&self) -> String {
+        "".to_string()
+    }
+}
+
 impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
         let data = std::fs::read_to_string(file_path)?
@@ -192,18 +202,19 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     }
 }
 
-pub trait ParticleMapAttributeLerp: ParticleMapAttribute {
+pub trait ParticleMapAttributeLerp: ParticleMapAttribute + Default {
     fn lerp(&self, other: &Self, t: f64) -> Self;
-    fn zero() -> Self;
 }
 
 impl ParticleMapAttributeLerp for f64 {
     fn lerp(&self, other: &Self, t: f64) -> Self {
         self + (other - self) * t
     }
+}
 
-    fn zero() -> Self {
-        0.0
+impl ParticleMapAttributeLerp for () {
+    fn lerp(&self, _: &Self, _: f64) -> Self {
+        ()
     }
 }
 
@@ -331,7 +342,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                             (weight / weight_sum - 0.5).max(0.0),
                         )
                     } else {
-                        (&T::zero(), weight / weight_sum)
+                        (&T::default(), weight / weight_sum)
                     };
                     tmp_weight += weight;
                     if tmp_weight <= 0.0 {
