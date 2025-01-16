@@ -1,6 +1,6 @@
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 use worley_particle::{
-    map::{IDWStrategy, IsobandResult, ParticleMap, RasteriseMethod},
+    map::{IDWStrategy, InterpolationMethod, IsobandResult, ParticleMap},
     Particle, ParticleParameters,
 };
 
@@ -24,7 +24,7 @@ fn main() {
             ((min_x, min_y), (max_x, max_y)),
             30.0,
             &thresholds,
-            &RasteriseMethod::IDW(IDWStrategy::default_from_params(&params)),
+            &InterpolationMethod::IDW(IDWStrategy::default_from_params(&params)),
             true,
         )
         .unwrap();
@@ -82,7 +82,7 @@ fn main() {
         image_width as usize,
         image_height as usize,
         map.corners(),
-        &RasteriseMethod::IDW(IDWStrategy::default_from_params(&params)),
+        &InterpolationMethod::IDW(IDWStrategy::default_from_params(&params)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);

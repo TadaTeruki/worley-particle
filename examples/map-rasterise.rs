@@ -1,5 +1,5 @@
 use worley_particle::{
-    map::{IDWStrategy, ParticleMap, RasteriseMethod},
+    map::{IDWStrategy, InterpolationMethod, ParticleMap},
     Particle, ParticleParameters,
 };
 
@@ -20,7 +20,7 @@ fn main() {
         image_width,
         image_height,
         map.corners(),
-        &RasteriseMethod::IDW(IDWStrategy::default_from_params(&params)),
+        &InterpolationMethod::IDW(IDWStrategy::default_from_params(&params)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);

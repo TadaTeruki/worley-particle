@@ -232,19 +232,19 @@ impl Default for IDWStrategy {
     }
 }
 
-pub enum RasteriseMethod {
+pub enum InterpolationMethod {
     Nearest,
     IDW(IDWStrategy),
 }
 
 impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
-    pub fn get_value(&self, x: f64, y: f64, method: &RasteriseMethod) -> Option<T> {
+    pub fn get_value(&self, x: f64, y: f64, method: &InterpolationMethod) -> Option<T> {
         match method {
-            RasteriseMethod::Nearest => {
+            InterpolationMethod::Nearest => {
                 let particle = Particle::from(x, y, self.params);
                 self.particles.get(&particle).cloned()
             }
-            RasteriseMethod::IDW(strategy) => {
+            InterpolationMethod::IDW(strategy) => {
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
                 let inside =
@@ -286,7 +286,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
         img_width: usize,
         img_height: usize,
         corners: ((f64, f64), (f64, f64)),
-        rasterise_method: &RasteriseMethod,
+        interp_method: &InterpolationMethod,
     ) -> Vec<Vec<Option<T>>> {
         let ((mut min_x, mut min_y), (mut max_x, mut max_y)) = corners;
         if min_x > max_x {
@@ -301,7 +301,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
             for (ix, item) in item.iter_mut().enumerate().take(img_width) {
                 let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
                 let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
-                *item = self.get_value(x, y, rasterise_method);
+                *item = self.get_value(x, y, interp_method);
             }
         }
 
@@ -320,7 +320,7 @@ impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
         corners: ((f64, f64), (f64, f64)),
         rasterise_scale: f64,
         thresholds: &[f64],
-        rasterise_method: &RasteriseMethod,
+        interp_method: &InterpolationMethod,
         multi_thread: bool,
     ) -> Result<Vec<IsobandResult>, Box<dyn Error>> {
         let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;
@@ -343,7 +343,7 @@ impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
             width,
             height,
             ((domain_min_x, domain_min_y), (domain_max_x, domain_max_y)),
-            rasterise_method,
+            interp_method,
         );
 
         let raster_f64 = raster
