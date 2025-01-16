@@ -1,17 +1,17 @@
 use worley_particle::{
     map::{IDWStrategy, ParticleMap, RasteriseMethod},
-    GenerationRules, Particle,
+    Particle, ParticleParameters,
 };
 
 fn main() {
-    let rules = GenerationRules::new(0.8, 0.8, 0.5, 0).unwrap();
-    let cells = Particle::from_inside_radius(0.0, 0.0, rules, 5.0);
+    let params = ParticleParameters::new(0.8, 0.8, 0.5, 0).unwrap();
+    let cells = Particle::from_inside_radius(0.0, 0.0, params, 5.0);
     let values = cells
         .iter()
         .map(|cell| (cell.hash_u64() % 10) as f64 * 0.1)
         .collect::<Vec<_>>();
 
-    let map = ParticleMap::new(rules, cells.into_iter().zip(values).collect());
+    let map = ParticleMap::new(params, cells.into_iter().zip(values).collect());
 
     let image_width = 500;
     let image_height = 500;
@@ -20,7 +20,7 @@ fn main() {
         image_width,
         image_height,
         map.corners(),
-        &RasteriseMethod::IDW(IDWStrategy::default_from_rules(&rules)),
+        &RasteriseMethod::IDW(IDWStrategy::default_from_params(&params)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
-use worley_particle::{GenerationRules, Particle};
+use worley_particle::{Particle, ParticleParameters};
 
 fn main() {
     let image_width = 500;
@@ -18,8 +18,8 @@ fn main() {
             let x = min_x + (max_x - min_x) * (ix as f64 / image_width as f64);
             let y = min_y + (max_y - min_y) * (iy as f64 / image_height as f64);
 
-            let rules = GenerationRules::new(0.8, 0.8, 0.1, 0).unwrap();
-            let ptc = Particle::from(x, y, rules);
+            let params = ParticleParameters::new(0.8, 0.8, 0.1, 0).unwrap();
+            let ptc = Particle::from(x, y, params);
             if cells.contains(&ptc) {
                 continue;
             }

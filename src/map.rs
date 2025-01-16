@@ -2,29 +2,29 @@ use std::{collections::HashMap, error::Error, fmt::Debug};
 
 use contour_isobands::isobands;
 
-use crate::{GenerationRules, Particle};
+use crate::{Particle, ParticleParameters};
 
 #[derive(Debug, Clone)]
 pub struct ParticleMap<T: Debug + Clone + PartialEq> {
-    rules: GenerationRules,
+    params: ParticleParameters,
     particles: HashMap<Particle, T>,
 }
 
 impl<T: Debug + Clone + PartialEq> ParticleMap<T> {
-    pub fn new(rules: GenerationRules, particles: HashMap<Particle, T>) -> Self {
-        Self { rules, particles }
+    pub fn new(params: ParticleParameters, particles: HashMap<Particle, T>) -> Self {
+        Self { params, particles }
     }
 
-    pub fn as_hash_map(&self) -> &HashMap<Particle, T> {
-        &self.particles
+    pub fn iter(&self) -> impl Iterator<Item = (&Particle, &T)> {
+        self.particles.iter()
     }
 
     pub fn sites(&self) -> Vec<(f64, f64)> {
         self.particles.keys().map(|cell| cell.site()).collect()
     }
 
-    pub fn rules(&self) -> &GenerationRules {
-        &self.rules
+    pub fn params(&self) -> &ParticleParameters {
+        &self.params
     }
 
     pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
@@ -117,7 +117,7 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     }
 
     pub fn read_from_lines(data: Vec<String>) -> Result<Self, Box<dyn Error>> {
-        let mut rules = GenerationRules::default();
+        let mut params = ParticleParameters::default();
 
         let mut raw_particles: Vec<(f64, f64)> = Vec::new();
         let mut other_data: Vec<T> = Vec::new();
@@ -131,10 +131,10 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
                     let key = iter.next().unwrap();
                     let value = iter.next().unwrap();
                     match key {
-                        "seed" => rules.seed = value.parse().unwrap(),
-                        "min_randomness" => rules.min_randomness = value.parse().unwrap(),
-                        "max_randomness" => rules.max_randomness = value.parse().unwrap(),
-                        "scale" => rules.scale = value.parse().unwrap(),
+                        "seed" => params.seed = value.parse().unwrap(),
+                        "min_randomness" => params.min_randomness = value.parse().unwrap(),
+                        "max_randomness" => params.max_randomness = value.parse().unwrap(),
+                        "scale" => params.scale = value.parse().unwrap(),
                         _ => panic!("Unknown key: {}", key),
                     }
                 }
@@ -159,12 +159,12 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
             .map(|((x, y), other_data)| {
                 let x = *x;
                 let y = *y;
-                let particle = Particle::from(x, y, rules);
+                let particle = Particle::from(x, y, params);
                 (particle, other_data.clone())
             })
             .collect::<HashMap<_, _>>();
 
-        Ok(Self { rules, particles })
+        Ok(Self { params, particles })
     }
 
     pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
@@ -172,10 +172,10 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
 
         data.push(format!(
             "seed:{},min_randomness:{},max_randomness:{},scale:{}",
-            self.particles.keys().next().unwrap().rules.seed,
-            self.particles.keys().next().unwrap().rules.min_randomness,
-            self.particles.keys().next().unwrap().rules.max_randomness,
-            self.particles.keys().next().unwrap().rules.scale
+            self.particles.keys().next().unwrap().params.seed,
+            self.particles.keys().next().unwrap().params.min_randomness,
+            self.particles.keys().next().unwrap().params.max_randomness,
+            self.particles.keys().next().unwrap().params.scale
         ));
 
         for (particle, other_data) in self.particles.iter() {
@@ -208,10 +208,10 @@ pub struct IDWStrategy {
 }
 
 impl IDWStrategy {
-    pub fn default_from_rules(rules: &GenerationRules) -> Self {
+    pub fn default_from_params(params: &ParticleParameters) -> Self {
         Self {
-            sample_min_distance: rules.scale * 1e-6,
-            sample_max_distance: rules.scale * 1.415,
+            sample_min_distance: params.scale * 1e-6,
+            sample_max_distance: params.scale * 1.415,
             weight_power: 1.5,
             smooth_power: Some(1.0),
         }
@@ -238,14 +238,14 @@ impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp> ParticleMap<T> {
     pub fn get_value(&self, x: f64, y: f64, method: &RasteriseMethod) -> Option<T> {
         match method {
             RasteriseMethod::Nearest => {
-                let particle = Particle::from(x, y, self.rules);
+                let particle = Particle::from(x, y, self.params);
                 self.particles.get(&particle).cloned()
             }
             RasteriseMethod::IDW(strategy) => {
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
                 let inside =
-                    Particle::from_inside_square(x, y, self.rules, strategy.sample_max_distance);
+                    Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
                 let particles_iter = inside
                     .iter()
                     .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
@@ -322,7 +322,7 @@ impl<T: Debug + Clone + PartialEq + ParticleMapAttributeLerp + Into<f64>> Partic
     ) -> Result<Vec<IsobandResult>, Box<dyn Error>> {
         let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;
 
-        let expansion = rasterise_scale * self.rules.scale;
+        let expansion = rasterise_scale * self.params.scale;
 
         let raster_min_x = (original_min_x * expansion).floor() as i64;
         let raster_max_x = (original_max_x * expansion).ceil() as i64;
@@ -438,18 +438,18 @@ mod tests {
 
     #[test]
     fn test_validate_read_and_write() {
-        let rules = GenerationRules {
+        let params = ParticleParameters {
             seed: 0,
             min_randomness: 0.2,
             max_randomness: 0.5,
             scale: 0.1,
         };
-        let cells = Particle::from_inside_radius(0.0, 0.0, rules, 10.0);
+        let cells = Particle::from_inside_radius(0.0, 0.0, params, 10.0);
         let values = cells
             .iter()
             .map(|cell| (cell.hash_u64() % 10) as f64)
             .collect::<Vec<_>>();
-        let map = ParticleMap::new(rules, cells.into_iter().zip(values).collect());
+        let map = ParticleMap::new(params, cells.into_iter().zip(values).collect());
 
         map.write_to_file("data/output/out.particlemap").unwrap();
 

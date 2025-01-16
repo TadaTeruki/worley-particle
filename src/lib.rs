@@ -107,9 +107,9 @@ pub enum GenerationRuleError {
     InvalidScale,
 }
 
-/// Rules for the generation of the Worley noise.
+/// Parameters for the generation of the Worley noise.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GenerationRules {
+pub struct ParticleParameters {
     /// Minimum randomness of the feature point (in [0.0, 1.0]).
     /// randomness <= 0.5 is recommended for better performance and stability.
     min_randomness: f64,
@@ -122,7 +122,7 @@ pub struct GenerationRules {
     seed: u64,
 }
 
-impl Hash for GenerationRules {
+impl Hash for ParticleParameters {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.min_randomness.to_bits().hash(state);
         self.max_randomness.to_bits().hash(state);
@@ -131,9 +131,9 @@ impl Hash for GenerationRules {
     }
 }
 
-impl Eq for GenerationRules {}
+impl Eq for ParticleParameters {}
 
-impl Default for GenerationRules {
+impl Default for ParticleParameters {
     fn default() -> Self {
         Self {
             min_randomness: 0.5,
@@ -144,7 +144,7 @@ impl Default for GenerationRules {
     }
 }
 
-impl GenerationRules {
+impl ParticleParameters {
     pub fn new(
         min_randomness: f64,
         max_randomness: f64,
@@ -203,34 +203,34 @@ pub struct Particle {
     /// (x, y) coordinate of the grid.
     grid: (i64, i64),
     /// rule of the generation.
-    rules: GenerationRules,
+    params: ParticleParameters,
 }
 
 impl Hash for Particle {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.grid.hash(state);
-        self.rules.hash(state);
+        self.params.hash(state);
     }
 }
 
 impl Eq for Particle {}
 
 impl Particle {
-    pub fn new(grid_x: i64, grid_y: i64, rules: GenerationRules) -> Self {
+    pub fn new(grid_x: i64, grid_y: i64, params: ParticleParameters) -> Self {
         Self {
             grid: (grid_x, grid_y),
-            rules,
+            params,
         }
     }
 
-    pub fn from(x: f64, y: f64, rules: GenerationRules) -> Self {
-        let (ix, iy) = get_grid(x / rules.scale, y / rules.scale);
-        let ptc = Self::new(ix, iy, rules);
+    pub fn from(x: f64, y: f64, params: ParticleParameters) -> Self {
+        let (ix, iy) = get_grid(x / params.scale, y / params.scale);
+        let ptc = Self::new(ix, iy, params);
         let mut best_ptc = ptc;
         let mut best_sqdist = square_distance(&(x, y), &ptc.site());
 
         for (nx, ny) in get_grids_around(ix, iy).iter() {
-            let ptc = Self::new(*nx, *ny, rules);
+            let ptc = Self::new(*nx, *ny, params);
             let sqdist = square_distance(&(x, y), &ptc.site());
             if sqdist < best_sqdist {
                 best_ptc = ptc;
@@ -249,26 +249,31 @@ impl Particle {
 
     pub fn site(&self) -> (f64, f64) {
         let rel_core = site_point_from_hash(
-            hash_2d(self.grid.0, self.grid.1, self.rules.seed),
-            self.rules.min_randomness,
-            self.rules.max_randomness,
+            hash_2d(self.grid.0, self.grid.1, self.params.seed),
+            self.params.min_randomness,
+            self.params.max_randomness,
         );
         (
-            (self.grid.0 as f64 + rel_core.0) * self.rules.scale,
-            (self.grid.1 as f64 + rel_core.1) * self.rules.scale,
+            (self.grid.0 as f64 + rel_core.0) * self.params.scale,
+            (self.grid.1 as f64 + rel_core.1) * self.params.scale,
         )
     }
 
-    pub fn from_inside_radius(x: f64, y: f64, rules: GenerationRules, radius: f64) -> Vec<Self> {
+    pub fn from_inside_radius(
+        x: f64,
+        y: f64,
+        params: ParticleParameters,
+        radius: f64,
+    ) -> Vec<Self> {
         let (corner_min_x, corner_min_y) =
-            get_grid((x - radius) / rules.scale, (y - radius) / rules.scale);
+            get_grid((x - radius) / params.scale, (y - radius) / params.scale);
         let (corner_max_x, corner_max_y) =
-            get_grid((x + radius) / rules.scale, (y + radius) / rules.scale);
+            get_grid((x + radius) / params.scale, (y + radius) / params.scale);
 
         let mut surroundings = Vec::new();
         for iy in corner_min_y..=corner_max_y {
             for ix in corner_min_x..=corner_max_x {
-                let ptc = Self::new(ix, iy, rules);
+                let ptc = Self::new(ix, iy, params);
                 if square_distance(&(x, y), &ptc.site()) < radius.powi(2) {
                     surroundings.push(ptc);
                 }
@@ -278,16 +283,16 @@ impl Particle {
         surroundings
     }
 
-    pub fn from_inside_square(x: f64, y: f64, rules: GenerationRules, side: f64) -> Vec<Self> {
+    pub fn from_inside_square(x: f64, y: f64, params: ParticleParameters, side: f64) -> Vec<Self> {
         let (corner_min_x, corner_min_y) =
-            get_grid((x - side) / rules.scale, (y - side) / rules.scale);
+            get_grid((x - side) / params.scale, (y - side) / params.scale);
         let (corner_max_x, corner_max_y) =
-            get_grid((x + side) / rules.scale, (y + side) / rules.scale);
+            get_grid((x + side) / params.scale, (y + side) / params.scale);
 
         let mut surroundings = Vec::new();
         for iy in corner_min_y..=corner_max_y {
             for ix in corner_min_x..=corner_max_x {
-                surroundings.push(Self::new(ix, iy, rules));
+                surroundings.push(Self::new(ix, iy, params));
             }
         }
 
@@ -300,13 +305,13 @@ impl Particle {
         let (ix, iy) = (self.grid.0, self.grid.1);
 
         // little bit complicated logic for large max_randomness
-        let wide = self.rules.max_randomness > 0.5;
+        let wide = self.params.max_randomness > 0.5;
 
         let (mut around_sites, mut around_grids) = if wide {
             let around_grids = get_grids_wide_around(ix, iy);
             let around_sites = around_grids
                 .iter()
-                .map(|&x| Self::new(x.0, x.1, self.rules).site())
+                .map(|&x| Self::new(x.0, x.1, self.params).site())
                 .collect::<Vec<(f64, f64)>>();
 
             let mut idx = (0..around_sites.len())
@@ -330,7 +335,7 @@ impl Particle {
             let mut around_sites = vec![(0.0, 0.0); 8];
             for i in 0..around_grids.len() {
                 around_sites[i] =
-                    Self::new(around_grids[i].0, around_grids[i].1, self.rules).site();
+                    Self::new(around_grids[i].0, around_grids[i].1, self.params).site();
             }
             (around_sites, around_grids.to_vec())
         };
@@ -393,7 +398,7 @@ impl Particle {
             polygon: centers,
             neighbors: around_grids
                 .iter()
-                .map(|&x| Self::new(x.0, x.1, self.rules))
+                .map(|&x| Self::new(x.0, x.1, self.params))
                 .collect(),
         }
     }
@@ -466,8 +471,8 @@ mod test {
     #[test]
     fn test_calculate_voronoi() {
         let randomness = 0.9;
-        let rules = GenerationRules::new(randomness, randomness, 1.0, 0).unwrap();
-        let ptc = Particle::from(0.0, 0.0, rules);
+        let params = ParticleParameters::new(randomness, randomness, 1.0, 0).unwrap();
+        let ptc = Particle::from(0.0, 0.0, params);
         let voronoi = ptc.calculate_voronoi();
         assert_eq!(voronoi.polygon.len(), voronoi.neighbors.len());
 
@@ -486,13 +491,13 @@ mod test {
             let mut rng = StdRng::from_seed([seed; 32]);
             let point: (f64, f64) = (rng.gen_range(-100.0..100.0), rng.gen_range(-100.0..100.0));
             let randomness: f64 = rng.gen_range(0.0..0.9);
-            let rules = GenerationRules::new(randomness, randomness, 1.0, 0).unwrap();
+            let params = ParticleParameters::new(randomness, randomness, 1.0, 0).unwrap();
             let radius: f64 = rng.gen_range(0.0..100.0);
             let mut count = 0;
-            let surroundings = Particle::from_inside_radius(point.0, point.1, rules, radius);
+            let surroundings = Particle::from_inside_radius(point.0, point.1, params, radius);
             for iy in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
                 for ix in -(radius.ceil() + 1.0) as i64 * 3..=(radius.ceil() + 1.0) as i64 * 3 {
-                    let ptc = Particle::new(point.0 as i64 + ix, point.1 as i64 + iy, rules);
+                    let ptc = Particle::new(point.0 as i64 + ix, point.1 as i64 + iy, params);
                     if square_distance(&point, &ptc.site()) < radius.powi(2) {
                         count += 1;
                     }

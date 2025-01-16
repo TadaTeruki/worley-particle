@@ -1,19 +1,19 @@
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 use worley_particle::{
     map::{IDWStrategy, IsobandResult, ParticleMap, RasteriseMethod},
-    GenerationRules, Particle,
+    Particle, ParticleParameters,
 };
 
 fn main() {
-    let rules = GenerationRules::new(0.8, 0.8, 0.5, 0).unwrap();
+    let params = ParticleParameters::new(0.8, 0.8, 0.5, 0).unwrap();
     let radius = 5.0;
-    let cells = Particle::from_inside_radius(2.0, 1.0, rules, radius);
+    let cells = Particle::from_inside_radius(2.0, 1.0, params, radius);
     let values = cells
         .iter()
         .map(|cell| (cell.hash_u64() % 10) as f64 * 0.1)
         .collect::<Vec<_>>();
 
-    let map = ParticleMap::new(rules, cells.into_iter().zip(values).collect());
+    let map = ParticleMap::new(params, cells.into_iter().zip(values).collect());
 
     let thresholds = (0..=10).map(|i| i as f64 / 10.).collect::<Vec<_>>();
 
@@ -24,7 +24,7 @@ fn main() {
             ((min_x, min_y), (max_x, max_y)),
             30.0,
             &thresholds,
-            &RasteriseMethod::IDW(IDWStrategy::default_from_rules(&rules)),
+            &RasteriseMethod::IDW(IDWStrategy::default_from_params(&params)),
             true,
         )
         .unwrap();
@@ -82,7 +82,7 @@ fn main() {
         image_width as usize,
         image_height as usize,
         map.corners(),
-        &RasteriseMethod::IDW(IDWStrategy::default_from_rules(&rules)),
+        &RasteriseMethod::IDW(IDWStrategy::default_from_params(&params)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);
