@@ -194,11 +194,16 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
 
 pub trait ParticleMapAttributeLerp: ParticleMapAttribute {
     fn lerp(&self, other: &Self, t: f64) -> Self;
+    fn zero() -> Self;
 }
 
 impl ParticleMapAttributeLerp for f64 {
     fn lerp(&self, other: &Self, t: f64) -> Self {
         self + (other - self) * t
+    }
+
+    fn zero() -> Self {
+        0.0
     }
 }
 
@@ -235,9 +240,32 @@ impl Default for IDWStrategy {
 pub enum InterpolationMethod {
     Nearest,
     IDW(IDWStrategy),
+    IDWSeparated(IDWStrategy),
 }
 
 impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
+    fn calculate_idw_weight(
+        x: f64,
+        y: f64,
+        site: (f64, f64),
+        sample_max_distance: f64,
+        weight_power: f64,
+        smooth_power: Option<f64>,
+    ) -> Option<f64> {
+        let distance = ((x - site.0).powi(2) + (y - site.1).powi(2)).sqrt();
+        if distance > sample_max_distance {
+            return None;
+        }
+        let weight = if let Some(smooth_power) = smooth_power {
+            (1.0 - (distance / sample_max_distance).powf(smooth_power))
+                / distance.powf(weight_power)
+        } else {
+            distance.powf(-weight_power)
+        };
+
+        Some(weight)
+    }
+
     pub fn get_value(&self, x: f64, y: f64, method: &InterpolationMethod) -> Option<T> {
         match method {
             InterpolationMethod::Nearest => {
@@ -247,28 +275,68 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
             InterpolationMethod::IDW(strategy) => {
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
+                let inside: Vec<Particle> =
+                    Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
+                let particles_iter = inside
+                    .iter()
+                    .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
+                for (particle, value) in particles_iter {
+                    let weight = Self::calculate_idw_weight(
+                        x,
+                        y,
+                        particle.site(),
+                        strategy.sample_max_distance,
+                        strategy.weight_power,
+                        strategy.smooth_power,
+                    );
+                    if let Some(weight) = weight {
+                        tmp_weight += weight;
+                        if let Some(total_value) = total_value.as_mut() {
+                            *total_value = total_value.lerp(value, weight / tmp_weight);
+                        } else {
+                            total_value = Some(value.clone());
+                        }
+                    }
+                }
+
+                total_value
+            }
+            InterpolationMethod::IDWSeparated(strategy) => {
                 let inside =
                     Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
                 let particles_iter = inside
                     .iter()
                     .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
-                for (other_particle, value) in particles_iter {
-                    let other_site = other_particle.site();
-                    let distance = ((x - other_site.0).powi(2) + (y - other_site.1).powi(2)).sqrt();
-                    if distance > strategy.sample_max_distance {
-                        continue;
-                    }
-                    if distance < strategy.sample_min_distance {
-                        total_value = Some(value.clone());
-                        break;
-                    }
-                    let weight = if let Some(smooth_power) = strategy.smooth_power {
-                        (1.0 - (distance / strategy.sample_max_distance).powf(smooth_power))
-                            / distance.powf(strategy.weight_power)
+                let weights_iter = particles_iter.filter_map(|(particle, _)| {
+                    Self::calculate_idw_weight(
+                        x,
+                        y,
+                        particle.site(),
+                        strategy.sample_max_distance,
+                        strategy.weight_power,
+                        strategy.smooth_power,
+                    )
+                    .map(|weight| (particle, weight))
+                });
+
+                let self_particle = Particle::from(x, y, self.params);
+
+                let weight_sum = weights_iter.clone().map(|(_, weight)| weight).sum::<f64>();
+                let mut total_value: Option<T> = None;
+                let mut tmp_weight = 0.0;
+                for (particle, weight) in weights_iter {
+                    let (value, weight) = if particle == &self_particle {
+                        (
+                            self.particles.get(particle).unwrap(),
+                            (weight / weight_sum - 0.5).max(0.0),
+                        )
                     } else {
-                        distance.powf(-strategy.weight_power)
+                        (&T::zero(), weight / weight_sum)
                     };
                     tmp_weight += weight;
+                    if tmp_weight <= 0.0 {
+                        continue;
+                    }
                     if let Some(total_value) = total_value.as_mut() {
                         *total_value = total_value.lerp(value, weight / tmp_weight);
                     } else {

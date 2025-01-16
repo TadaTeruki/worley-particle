@@ -20,7 +20,7 @@ fn main() {
         image_width,
         image_height,
         map.corners(),
-        &InterpolationMethod::IDW(IDWStrategy::default_from_params(&params)),
+        &InterpolationMethod::IDWSeparated(IDWStrategy::default_from_params(&params)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);
