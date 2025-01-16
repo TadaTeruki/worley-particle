@@ -23,4 +23,4 @@ And optionally:
 
 # License
 
-License under the terms of both the [MIT license](LICENSE-MIT) and the [Apache License (Version 2.0)](LICENSE-APACHE). Choose the one that is more appropriate for you.
+Licensed under the terms of both the [MIT license](LICENSE_MIT) and the [Apache License (Version 2.0)](LICENSE_APACHE). Choose the one that is more appropriate for you.
