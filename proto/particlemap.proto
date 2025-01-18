@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package particlemap.items;
+
+message MsgParticleParameters {
+  uint64 seed = 1;
+  double min_randomness = 2;
+  double max_randomness = 3;
+  double scale = 4;
+}
+
+message MsgParticle {
+  double x = 1;
+  double y = 2;
+  string value = 3;
+}
+
+message MsgParticleMap {
+  MsgParticleParameters params = 1;
+  repeated MsgParticle particles = 2;
+}

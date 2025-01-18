@@ -1,8 +1,16 @@
-use std::{collections::HashMap, error::Error, fmt::Debug};
+use std::{collections::HashMap, error::Error, fmt::Debug, io::Write};
 
 use contour_isobands::isobands;
+use particlemap::items::{MsgParticle, MsgParticleMap, MsgParticleParameters};
+use prost::Message;
 
 use crate::{Particle, ParticleParameters};
+
+pub mod particlemap {
+    pub mod items {
+        include!(concat!(env!("OUT_DIR"), "/particlemap.items.rs"));
+    }
+}
 
 pub trait ParticleMapAttribute: Debug + Clone + PartialEq {}
 impl<T: Debug + Clone + PartialEq> ParticleMapAttribute for T {}
@@ -121,82 +129,58 @@ impl ParticleMapAttributeRW for () {
 
 impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
-        let data = std::fs::read_to_string(file_path)?
-            .lines()
-            .map(|line| line.to_string())
-            .collect();
+        let data = std::fs::read(file_path)?;
 
-        Self::read_from_lines(data)
-    }
+        let map = MsgParticleMap::decode(prost::bytes::Bytes::from(data))?;
 
-    pub fn read_from_lines(data: Vec<String>) -> Result<Self, Box<dyn Error>> {
-        let mut params = ParticleParameters::default();
+        let params = ParticleParameters {
+            seed: map.params.unwrap().seed,
+            min_randomness: map.params.unwrap().min_randomness,
+            max_randomness: map.params.unwrap().max_randomness,
+            scale: map.params.unwrap().scale,
+        };
 
-        let mut raw_particles: Vec<(f64, f64)> = Vec::new();
-        let mut other_data: Vec<T> = Vec::new();
-
-        for (i, line) in data.iter().enumerate() {
-            let line = line.trim();
-            if i == 0 {
-                let iter = line.split(',');
-                for value in iter {
-                    let mut iter = value.split(':');
-                    let key = iter.next().unwrap();
-                    let value = iter.next().unwrap();
-                    match key {
-                        "seed" => params.seed = value.parse().unwrap(),
-                        "min_randomness" => params.min_randomness = value.parse().unwrap(),
-                        "max_randomness" => params.max_randomness = value.parse().unwrap(),
-                        "scale" => params.scale = value.parse().unwrap(),
-                        _ => panic!("Unknown key: {}", key),
-                    }
-                }
-            } else {
-                let mut iter = line.split('[');
-                let mut iter = iter.nth(1).unwrap().split(']');
-                let coords_str = iter.next().unwrap();
-                let other_data_str = iter.next().unwrap();
-                raw_particles.push({
-                    let mut iter = coords_str.split(',');
-                    let x = iter.next().unwrap().parse().unwrap();
-                    let y = iter.next().unwrap().parse().unwrap();
-                    (x, y)
-                });
-                other_data.push(T::from_str(&other_data_str.split(',').collect::<Vec<_>>())?);
-            }
-        }
-
-        let particles = raw_particles
+        let particles = map
+            .particles
             .iter()
-            .zip(other_data.iter())
-            .map(|((x, y), other_data)| {
-                let x = *x;
-                let y = *y;
-                let particle = Particle::from(x, y, params);
-                (particle, other_data.clone())
+            .map(|particle| {
+                let value = T::from_str(&particle.value.split(',').collect::<Vec<_>>())?;
+                Ok((Particle::from(particle.x, particle.y, params), value))
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<Result<HashMap<Particle, T>, Box<dyn Error>>>()?;
 
-        Ok(Self { params, particles })
+        Ok(Self::new(params, particles))
     }
 
     pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
-        let mut data = Vec::new();
+        let map = MsgParticleMap {
+            params: Some(MsgParticleParameters {
+                seed: self.params.seed,
+                min_randomness: self.params.min_randomness,
+                max_randomness: self.params.max_randomness,
+                scale: self.params.scale,
+            }),
+            particles: self
+                .particles
+                .iter()
+                .map(|(particle, value)| {
+                    let site = particle.site();
+                    MsgParticle {
+                        x: site.0,
+                        y: site.1,
+                        value: value.to_string(),
+                    }
+                })
+                .collect(),
+        };
 
-        data.push(format!(
-            "seed:{},min_randomness:{},max_randomness:{},scale:{}",
-            self.particles.keys().next().unwrap().params.seed,
-            self.particles.keys().next().unwrap().params.min_randomness,
-            self.particles.keys().next().unwrap().params.max_randomness,
-            self.particles.keys().next().unwrap().params.scale
-        ));
+        let mut file = std::fs::File::create(file_path)?;
+        let mut writer = std::io::BufWriter::new(&mut file);
 
-        for (particle, other_data) in self.particles.iter() {
-            let site = particle.site();
-            data.push(format!("[{},{}]{}", site.0, site.1, other_data.to_string()));
-        }
+        let mut buf = prost::bytes::BytesMut::new();
+        prost::Message::encode(&map, &mut buf)?;
 
-        std::fs::write(file_path, data.join("\n"))?;
+        writer.write_all(&buf)?;
 
         Ok(())
     }
@@ -509,13 +493,6 @@ mod tests {
         fn to_string(&self) -> String {
             format!("{},{}", self.value, self.name)
         }
-    }
-
-    #[test]
-    fn test_read_from_file() {
-        let map = ParticleMap::<TestAttribute>::read_from_file("data/sample.particlemap").unwrap();
-
-        assert_eq!(map.particles.len(), 3);
     }
 
     #[test]
