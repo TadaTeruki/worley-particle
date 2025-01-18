@@ -10,8 +10,8 @@ message MsgParticleParameters {
 }
 
 message MsgParticle {
-  double x = 1;
-  double y = 2;
+  int64 x = 1;
+  int64 y = 2;
   string value = 3;
 }
 

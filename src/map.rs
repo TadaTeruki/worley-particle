@@ -145,7 +145,7 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
             .iter()
             .map(|particle| {
                 let value = T::from_str(&particle.value.split(',').collect::<Vec<_>>())?;
-                Ok((Particle::from(particle.x, particle.y, params), value))
+                Ok((Particle::new(particle.x, particle.y, params), value))
             })
             .collect::<Result<HashMap<Particle, T>, Box<dyn Error>>>()?;
 
@@ -164,10 +164,9 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
                 .particles
                 .iter()
                 .map(|(particle, value)| {
-                    let site = particle.site();
                     MsgParticle {
-                        x: site.0,
-                        y: site.1,
+                        x: particle.grid.0,
+                        y: particle.grid.1,
                         value: value.to_string(),
                     }
                 })
