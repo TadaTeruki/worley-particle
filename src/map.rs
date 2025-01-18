@@ -130,8 +130,11 @@ impl ParticleMapAttributeRW for () {
 impl<T: ParticleMapAttributeRW> ParticleMap<T> {
     pub fn read_from_file(file_path: &str) -> Result<Self, Box<dyn Error>> {
         let data = std::fs::read(file_path)?;
+        Self::read_from_bytes(data)
+    }
 
-        let map = MsgParticleMap::decode(prost::bytes::Bytes::from(data))?;
+    pub fn read_from_bytes(bytes: Vec<u8>) -> Result<Self, Box<dyn Error>> {
+        let map = MsgParticleMap::decode(prost::bytes::Bytes::from(bytes))?;
 
         let params = ParticleParameters {
             seed: map.params.unwrap().seed,
@@ -152,7 +155,7 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
         Ok(Self::new(params, particles))
     }
 
-    pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn write_to_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         let map = MsgParticleMap {
             params: Some(MsgParticleParameters {
                 seed: self.params.seed,
@@ -163,23 +166,24 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
             particles: self
                 .particles
                 .iter()
-                .map(|(particle, value)| {
-                    MsgParticle {
-                        x: particle.grid.0,
-                        y: particle.grid.1,
-                        value: value.to_string(),
-                    }
+                .map(|(particle, value)| MsgParticle {
+                    x: particle.grid.0,
+                    y: particle.grid.1,
+                    value: value.to_string(),
                 })
                 .collect(),
         };
 
+        let mut buf = Vec::new();
+        map.encode(&mut buf)?;
+
+        Ok(buf)
+    }
+
+    pub fn write_to_file(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
+        let data = self.write_to_bytes()?;
         let mut file = std::fs::File::create(file_path)?;
-        let mut writer = std::io::BufWriter::new(&mut file);
-
-        let mut buf = prost::bytes::BytesMut::new();
-        prost::Message::encode(&map, &mut buf)?;
-
-        writer.write_all(&buf)?;
+        file.write_all(&data)?;
 
         Ok(())
     }
