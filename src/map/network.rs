@@ -48,18 +48,15 @@ impl<T: ParticleMapAttribute> ParticleMapWithNetwork<T> {
     }
 
     pub fn is_connected(&self, a: Particle, b: Particle) -> bool {
-        let a = (a.grid.0, a.grid.1);
-        let b = (b.grid.0, b.grid.1);
-        if let Some(neighbors) = self.network.get(&a) {
-            neighbors.contains(&b)
+        if let Some(neighbors) = self.network.get(&a.grid) {
+            neighbors.contains(&b.grid)
         } else {
             false
         }
     }
 
     pub fn neighbors(&self, a: Particle) -> Vec<Particle> {
-        let a = (a.grid.0, a.grid.1);
-        if let Some(neighbors) = self.network.get(&a) {
+        if let Some(neighbors) = self.network.get(&a.grid) {
             neighbors
                 .iter()
                 .map(|n| Particle::new(n.0, n.1, *self.map.params()))
