@@ -1,6 +1,6 @@
 # particlemap
 
-Data format parser and handler for particle-based data which coordinates of particles are defined as sites of Worley noise.
+Data structure for particle-based data which coordinates of particles are defined as sites of Worley noise.
 
 ## How to use
 
@@ -11,24 +11,11 @@ Enable the feature `particlemap` in your `Cargo.toml`.
 worley-particle = { ..., features = ["particlemap"] }
 ```
 
-## Format Specification
+## Format Specification (.particlemap)
 
-`x` and `y` is the sites of each particle.
+This library also provides a data format to store particle-based data.
 
-```plaintext:example.particlemap
-seed,min_randomness,max_randomness,scale
-[{x},{y}]{other data}
-...
-```
-
-### Example
-
-```plaintext:example.particlemap
-seed:150,min_randomness:0.5,max_randomness:0.8,scale:0.05
-[23.8,45.2]355.7,mountain,rocky
-[18.5,32.1]2.3,plain,grass
-[3.2,7.8]-0.5,sea,sand
-```
+This format uses [Protocol Buffers](https://protobuf.dev/) to define the data structure. See [particlemap.proto](proto/particlemap.proto) for the format specification.
 
 ## Features
 
@@ -37,7 +24,7 @@ This library provides `ParticleMap` class to parse and handle the data.
 - Read data from file
 - Interpolation (Nearest, IDW)
 - Rastarisation
-- Vectorisation (using [contour-isobands-rs](https://crates.io/crates/contour-isobands))
+- Vectorisation (using [contour-rs](https://crates.io/crates/contour))
 
 ## Preview
 
