@@ -12,6 +12,8 @@ pub mod particlemap {
     }
 }
 
+pub mod network;
+
 pub trait ParticleMapAttribute: Debug + Clone + PartialEq {}
 impl<T: Debug + Clone + PartialEq> ParticleMapAttribute for T {}
 

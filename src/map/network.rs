@@ -1,0 +1,146 @@
+use std::collections::{BinaryHeap, HashMap};
+
+use crate::Particle;
+
+use super::{ParticleMap, ParticleMapAttribute};
+
+pub struct ParticleMapWithNetwork<T: ParticleMapAttribute> {
+    map: ParticleMap<T>,
+    network: HashMap<(i64, i64), Vec<(i64, i64)>>,
+}
+
+impl<T: ParticleMapAttribute> ParticleMapWithNetwork<T> {
+    pub fn new(map: ParticleMap<T>) -> Self {
+        let mut network = HashMap::new();
+        map.iter().for_each(|(particle, _)| {
+            let neighbors = particle.calculate_voronoi().neighbors;
+            let key = (particle.grid.0, particle.grid.1);
+            for neighbor in neighbors {
+                let neighbor_key = (neighbor.grid.0, neighbor.grid.1);
+                network
+                    .entry(neighbor_key)
+                    .or_insert_with(Vec::new)
+                    .push(key);
+            }
+        });
+        Self { map, network }
+    }
+
+    pub fn map(&self) -> &ParticleMap<T> {
+        &self.map
+    }
+
+    pub fn into_hashmap(&self) -> HashMap<Particle, Vec<Particle>> {
+        let params = self.map.params();
+        self.network
+            .clone()
+            .into_iter()
+            .map(|(k, v)| {
+                let k_particle = Particle::new(k.0, k.1, *params);
+                let mut v_particles = Vec::new();
+                for neighbor in v {
+                    let neighbor_particle = Particle::new(neighbor.0, neighbor.1, *params);
+                    v_particles.push(neighbor_particle);
+                }
+                (k_particle, v_particles)
+            })
+            .collect::<HashMap<Particle, Vec<Particle>>>()
+    }
+
+    pub fn is_connected(&self, a: Particle, b: Particle) -> bool {
+        let a = (a.grid.0, a.grid.1);
+        let b = (b.grid.0, b.grid.1);
+        if let Some(neighbors) = self.network.get(&a) {
+            neighbors.contains(&b)
+        } else {
+            false
+        }
+    }
+
+    pub fn neighbors(&self, a: Particle) -> Vec<Particle> {
+        let a = (a.grid.0, a.grid.1);
+        if let Some(neighbors) = self.network.get(&a) {
+            neighbors
+                .iter()
+                .map(|n| Particle::new(n.0, n.1, *self.map.params()))
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn create_path(
+        &self,
+        start: Particle,
+        mut finish_condition: impl FnMut(Particle) -> bool,
+        mut evaluation: impl FnMut(Particle, Particle) -> f64,
+    ) -> Vec<Particle> {
+        let mut heap = BinaryHeap::new();
+        heap.push(StateForPathfinding {
+            particle: start,
+            cost: 0.0,
+        });
+        let mut parent = HashMap::new();
+        parent.insert(start, start);
+
+        loop {
+            let current_state = heap.pop().unwrap();
+
+            let neighbors = self.neighbors(current_state.particle);
+            let mut next = None;
+            let mut next_evaluation = std::f64::MAX;
+            for neighbor in neighbors {
+                if parent.contains_key(&neighbor) {
+                    continue;
+                }
+                let evaluation = evaluation(current_state.particle, neighbor);
+                if evaluation > next_evaluation {
+                    next = Some(neighbor);
+                    next_evaluation = evaluation;
+                }
+            }
+            if let Some(next) = next {
+                heap.push(StateForPathfinding {
+                    particle: next,
+                    cost: next_evaluation,
+                });
+                parent.insert(next, current_state.particle);
+            } else {
+                break;
+            }
+            if finish_condition(current_state.particle) {
+                break;
+            }
+        }
+
+        let mut path = Vec::new();
+        let mut current = start;
+        while current != parent[&current] {
+            path.push(current);
+            current = parent[&current];
+        }
+        path.push(start);
+        path.reverse();
+        path
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct StateForPathfinding {
+    particle: Particle,
+    cost: f64,
+}
+
+impl Eq for StateForPathfinding {}
+
+impl PartialOrd for StateForPathfinding {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.cost.partial_cmp(&other.cost)
+    }
+}
+
+impl Ord for StateForPathfinding {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cost.partial_cmp(&other.cost).unwrap()
+    }
+}
