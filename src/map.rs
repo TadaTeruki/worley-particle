@@ -1,6 +1,6 @@
 use std::{collections::HashMap, error::Error, fmt::Debug, io::Write};
 
-use contour_isobands::isobands;
+use contour::ContourBuilder;
 use particlemap::items::{MsgParticle, MsgParticleMap, MsgParticleParameters};
 use prost::Message;
 
@@ -375,20 +375,26 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
     }
 }
 
-pub struct IsobandResult {
+pub struct Band {
     pub threshold: f64,
     pub polygons: Vec<Vec<(f64, f64)>>,
 }
 
+enum VectorizationType {
+    Contour,
+    Isoband,
+}
+
 impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
-    pub fn isobands(
+    fn vectorize(
         &self,
+        vectorization_type: VectorizationType,
         corners: ((f64, f64), (f64, f64)),
         rasterise_scale: f64,
         thresholds: &[f64],
         interp_method: &InterpolationMethod,
-        multi_thread: bool,
-    ) -> Result<Vec<IsobandResult>, Box<dyn Error>> {
+        smooth: bool,
+    ) -> Result<Vec<Band>, Box<dyn Error>> {
         let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;
 
         let expansion = rasterise_scale * self.params.scale;
@@ -427,47 +433,116 @@ impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
             })
             .collect::<Vec<_>>();
 
-        let res_raster = isobands(
-            &raster_f64,
-            thresholds,
-            multi_thread,
-            width,
-            height,
-            multi_thread,
-        );
-        if let Err(e) = res_raster {
-            return Err(e.to_string().into());
-        }
+        let result_coord_to_domain = |x: f64, y: f64| {
+            (
+                (x / width as f64) * (domain_max_x - domain_min_x) + domain_min_x,
+                (y / height as f64) * (domain_max_y - domain_min_y) + domain_min_y,
+            )
+        };
 
-        let res_domain = res_raster
-            .unwrap()
-            .iter()
-            .map(|band| {
-                let threshold = band.1;
-                let polygons = band
-                    .0
+        match vectorization_type {
+            VectorizationType::Contour => {
+                let result =
+                    ContourBuilder::new(width, height, smooth).contours(&raster_f64, thresholds);
+                if let Err(e) = result {
+                    return Err(e.to_string().into());
+                }
+
+                let bands = result
+                    .unwrap()
                     .iter()
-                    .map(|polygon| {
-                        polygon
+                    .map(|contour| {
+                        let polygons = contour
+                            .geometry()
                             .iter()
-                            .map(|point| {
-                                let x = (point.x() / width as f64) * (domain_max_x - domain_min_x)
-                                    + domain_min_x;
-                                let y = (point.y() / height as f64) * (domain_max_y - domain_min_y)
-                                    + domain_min_y;
-                                (x, y)
+                            .map(|polygon| {
+                                let exterior = polygon.exterior();
+                                exterior
+                                    .0
+                                    .iter()
+                                    .map(|coord| result_coord_to_domain(coord.x, coord.y))
+                                    .collect::<Vec<_>>()
                             })
-                            .collect::<Vec<_>>()
+                            .collect::<Vec<_>>();
+
+                        Band {
+                            threshold: contour.threshold(),
+                            polygons,
+                        }
                     })
                     .collect::<Vec<_>>();
-                IsobandResult {
-                    threshold,
-                    polygons,
-                }
-            })
-            .collect::<Vec<_>>();
 
-        Ok(res_domain)
+                Ok(bands)
+            }
+            VectorizationType::Isoband => {
+                let result =
+                    ContourBuilder::new(width, height, smooth).isobands(&raster_f64, thresholds);
+                if let Err(e) = result {
+                    return Err(e.to_string().into());
+                }
+                let bands = result
+                    .unwrap()
+                    .iter()
+                    .map(|band| {
+                        let polygons = band
+                            .geometry()
+                            .iter()
+                            .map(|polygon| {
+                                let exterior = polygon.exterior();
+                                exterior
+                                    .0
+                                    .iter()
+                                    .map(|coord| result_coord_to_domain(coord.x, coord.y))
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>();
+
+                        Band {
+                            threshold: band.min_v(),
+                            polygons,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                Ok(bands)
+            }
+        }
+    }
+
+    pub fn contours(
+        &self,
+        corners: ((f64, f64), (f64, f64)),
+        rasterise_scale: f64,
+        thresholds: &[f64],
+        interp_method: &InterpolationMethod,
+        smooth: bool,
+    ) -> Result<Vec<Band>, Box<dyn Error>> {
+        self.vectorize(
+            VectorizationType::Contour,
+            corners,
+            rasterise_scale,
+            thresholds,
+            interp_method,
+            smooth,
+        )
+    }
+
+    pub fn isobands(
+        &self,
+        corners: ((f64, f64), (f64, f64)),
+        rasterise_scale: f64,
+        thresholds: &[f64],
+        interp_method: &InterpolationMethod,
+        smooth: bool,
+    ) -> Result<Vec<Band>, Box<dyn Error>> {
+        self.vectorize(
+            VectorizationType::Isoband,
+            corners,
+            rasterise_scale,
+            thresholds,
+            interp_method,
+            smooth,
+        )
     }
 }
 

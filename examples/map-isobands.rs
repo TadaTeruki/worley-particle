@@ -1,6 +1,6 @@
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 use worley_particle::{
-    map::{IDWStrategy, InterpolationMethod, IsobandResult, ParticleMap},
+    map::{Band, IDWStrategy, InterpolationMethod, ParticleMap},
     Particle, ParticleParameters,
 };
 
@@ -36,7 +36,7 @@ fn main() {
 
     let mut pixmap = Pixmap::new(image_width, image_height).unwrap();
 
-    for IsobandResult {
+    for Band {
         threshold,
         polygons,
     } in isobands

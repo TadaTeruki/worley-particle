@@ -190,14 +190,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
-name = "contour-isobands"
-version = "0.4.3"
+name = "contour"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26974550046afe18364b9b7352499bf650d98d304e22bd0598d148aada488b6a"
+checksum = "43f49a660700a72e88a50e56af0f39fcb986aca2f7c031ffada53da46693869b"
 dependencies = [
  "geo-types",
- "rayon",
+ "lazy_static",
  "rustc-hash",
+ "slab",
 ]
 
 [[package]]
@@ -445,6 +446,12 @@ name = "jpeg-decoder"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5d4a7da358eff58addd2877a45865158f0d78c911d43a5784ceb7bbf52833b0"
+
+[[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "lebe"
@@ -975,6 +982,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "slab"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1316,7 +1332,7 @@ dependencies = [
 name = "worley-particle"
 version = "0.1.0"
 dependencies = [
- "contour-isobands",
+ "contour",
  "image",
  "prost",
  "prost-build",
