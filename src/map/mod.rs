@@ -23,6 +23,17 @@ pub struct ParticleMap<T: ParticleMapAttribute> {
     particles: HashMap<Particle, T>,
 }
 
+impl<T: ParticleMapAttribute> FromIterator<(Particle, T)> for ParticleMap<T> {
+    fn from_iter<I: IntoIterator<Item = (Particle, T)>>(iter: I) -> Self {
+        let particles = iter.into_iter().collect::<HashMap<_, _>>();
+        let params = particles
+            .keys()
+            .next()
+            .map_or_else(|| ParticleParameters::default(), |particle| particle.params);
+        Self { params, particles }
+    }
+}
+
 impl<T: ParticleMapAttribute> ParticleMap<T> {
     pub fn new(params: ParticleParameters, particles: HashMap<Particle, T>) -> Self {
         Self { params, particles }
