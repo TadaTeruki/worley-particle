@@ -277,6 +277,10 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
         Some(weight)
     }
 
+    pub fn get(&self, particle: &Particle) -> Option<&T> {
+        self.particles.get(particle)
+    }
+
     pub fn get_value(&self, x: f64, y: f64, method: &InterpolationMethod) -> Option<T> {
         match method {
             InterpolationMethod::Nearest => {
