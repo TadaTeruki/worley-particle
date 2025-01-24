@@ -1,16 +1,16 @@
 use std::collections::{BinaryHeap, HashMap};
 
-use crate::Particle;
+use crate::{Particle, ParticleParameters};
 
 use super::{ParticleMap, ParticleMapAttribute};
 
-pub struct ParticleMapWithNetwork<T: ParticleMapAttribute> {
-    map: ParticleMap<T>,
+pub struct ParticleNetwork {
+    params: ParticleParameters,
     network: HashMap<(i64, i64), Vec<(i64, i64)>>,
 }
 
-impl<T: ParticleMapAttribute> ParticleMapWithNetwork<T> {
-    pub fn new(map: ParticleMap<T>) -> Self {
+impl ParticleNetwork {
+    pub fn new<T: ParticleMapAttribute>(map: &ParticleMap<T>) -> Self {
         let mut network = HashMap::new();
         map.iter().for_each(|(particle, _)| {
             let neighbors = particle.calculate_voronoi().neighbors;
@@ -23,23 +23,21 @@ impl<T: ParticleMapAttribute> ParticleMapWithNetwork<T> {
                     .push(key);
             }
         });
-        Self { map, network }
-    }
-
-    pub fn map(&self) -> &ParticleMap<T> {
-        &self.map
+        Self {
+            params: *map.params(),
+            network,
+        }
     }
 
     pub fn network_into_hashmap(&self) -> HashMap<Particle, Vec<Particle>> {
-        let params = self.map.params();
         self.network
             .clone()
             .into_iter()
             .map(|(k, v)| {
-                let k_particle = Particle::new(k.0, k.1, *params);
+                let k_particle = Particle::new(k.0, k.1, self.params);
                 let mut v_particles = Vec::new();
                 for neighbor in v {
-                    let neighbor_particle = Particle::new(neighbor.0, neighbor.1, *params);
+                    let neighbor_particle = Particle::new(neighbor.0, neighbor.1, self.params);
                     v_particles.push(neighbor_particle);
                 }
                 (k_particle, v_particles)
@@ -59,7 +57,7 @@ impl<T: ParticleMapAttribute> ParticleMapWithNetwork<T> {
         if let Some(neighbors) = self.network.get(&a.grid) {
             neighbors
                 .iter()
-                .map(|n| Particle::new(n.0, n.1, *self.map.params()))
+                .map(|n| Particle::new(n.0, n.1, self.params))
                 .collect()
         } else {
             Vec::new()
