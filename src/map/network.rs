@@ -30,7 +30,7 @@ impl<T: ParticleMapAttribute> ParticleMapWithNetwork<T> {
         &self.map
     }
 
-    pub fn into_hashmap(&self) -> HashMap<Particle, Vec<Particle>> {
+    pub fn network_into_hashmap(&self) -> HashMap<Particle, Vec<Particle>> {
         let params = self.map.params();
         self.network
             .clone()
