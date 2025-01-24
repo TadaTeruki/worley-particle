@@ -192,9 +192,21 @@ impl ParticleParameters {
     }
 }
 
-pub struct WorleyPolygon {
+pub struct ParticlePolygon {
     pub polygon: Vec<(f64, f64)>,
     pub neighbors: Vec<Particle>,
+}
+
+impl ParticlePolygon {
+    pub fn area(&self) -> f64 {
+        let mut area = 0.0;
+        for i in 0..self.polygon.len() {
+            let a = self.polygon[i];
+            let b = self.polygon[(i + 1) % self.polygon.len()];
+            area += a.0 * b.1 - a.1 * b.0;
+        }
+        area.abs() / 2.0
+    }
 }
 
 /// A particle in the Worley noise.
@@ -300,7 +312,7 @@ impl Particle {
     }
 
     /// Get the voronoi cell.
-    pub fn calculate_voronoi(&self) -> WorleyPolygon {
+    pub fn calculate_voronoi(&self) -> ParticlePolygon {
         let site = self.site();
         let (ix, iy) = (self.grid.0, self.grid.1);
 
@@ -394,7 +406,7 @@ impl Particle {
             centers.push(center);
         }
 
-        WorleyPolygon {
+        ParticlePolygon {
             polygon: centers,
             neighbors: around_grids
                 .iter()
