@@ -414,6 +414,14 @@ impl Particle {
                 .collect(),
         }
     }
+
+    pub fn params(&self) -> ParticleParameters {
+        self.params
+    }
+
+    pub fn grid(&self) -> (i64, i64) {
+        self.grid
+    }
 }
 
 #[cfg(test)]
