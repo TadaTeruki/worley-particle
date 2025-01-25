@@ -44,7 +44,10 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
     }
 
     pub fn sites(&self) -> Vec<(f64, f64)> {
-        self.particles.keys().map(|cell| cell.site()).collect()
+        self.particles
+            .keys()
+            .map(|particle| particle.site())
+            .collect()
     }
 
     pub fn params(&self) -> &ParticleParameters {
@@ -59,7 +62,7 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         let particle_sites = self
             .particles
             .keys()
-            .map(|cell| cell.site())
+            .map(|particle| particle.site())
             .collect::<Vec<_>>();
 
         let min_x = particle_sites
@@ -131,6 +134,51 @@ impl ParticleMapAttributeRW for String {
 
     fn to_string(&self) -> String {
         self.clone()
+    }
+}
+
+impl ParticleMapAttributeRW for ParticleParameters {
+    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+        if let &[seed, min_randomness, max_randomness, scale] = s {
+            Ok(Self {
+                seed: seed.parse()?,
+                min_randomness: min_randomness.parse()?,
+                max_randomness: max_randomness.parse()?,
+                scale: scale.parse()?,
+            })
+        } else {
+            Err("Expected four values".into())
+        }
+    }
+
+    fn to_string(&self) -> String {
+        format!(
+            "{},{},{},{}",
+            self.seed, self.min_randomness, self.max_randomness, self.scale
+        )
+    }
+}
+
+impl ParticleMapAttributeRW for Particle {
+    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+        if let &[x, y, params] = s {
+            Ok(Self::new(
+                x.parse()?,
+                y.parse()?,
+                ParticleParameters::from_str(&[params])?,
+            ))
+        } else {
+            Err("Expected three values".into())
+        }
+    }
+
+    fn to_string(&self) -> String {
+        format!(
+            "{},{},{}",
+            self.grid.0,
+            self.grid.1,
+            self.params.to_string()
+        )
     }
 }
 
@@ -292,9 +340,9 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 let mut tmp_weight = 0.0;
                 let inside: Vec<Particle> =
                     Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
-                let particles_iter = inside
-                    .iter()
-                    .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
+                let particles_iter = inside.iter().filter_map(|particle| {
+                    self.particles.get(particle).map(|value| (particle, value))
+                });
                 for (particle, value) in particles_iter {
                     let weight = Self::calculate_idw_weight(
                         x,
@@ -319,9 +367,9 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
             InterpolationMethod::IDWSeparated(strategy) => {
                 let inside =
                     Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
-                let particles_iter = inside
-                    .iter()
-                    .filter_map(|cell| self.particles.get(cell).map(|value| (cell, value)));
+                let particles_iter = inside.iter().filter_map(|particle| {
+                    self.particles.get(particle).map(|value| (particle, value))
+                });
                 let weights_iter = particles_iter.filter_map(|(particle, _)| {
                     Self::calculate_idw_weight(
                         x,
@@ -598,16 +646,30 @@ mod tests {
             max_randomness: 0.5,
             scale: 0.1,
         };
-        let cells = Particle::from_inside_radius(0.0, 0.0, params, 10.0);
-        let values = cells
+        let particles = Particle::from_inside_radius(0.0, 0.0, params, 10.0);
+        let values = particles
             .iter()
-            .map(|cell| (cell.hash_u64() % 10) as f64)
+            .map(|particle| (particle.hash_u64() % 10) as f64)
             .collect::<Vec<_>>();
-        let map = ParticleMap::new(params, cells.into_iter().zip(values).collect());
+        let map = ParticleMap::new(params, particles.clone().into_iter().zip(values).collect());
 
         map.write_to_file("data/output/out.particlemap").unwrap();
 
         let map2 = ParticleMap::<f64>::read_from_file("data/output/out.particlemap").unwrap();
+
+        assert!(map.is_same(&map2));
+
+        let map = ParticleMap::new(
+            params,
+            particles
+                .into_iter()
+                .map(|particle| (particle, particle))
+                .collect(),
+        );
+
+        map.write_to_file("data/output/out.particlemap").unwrap();
+
+        let map2 = ParticleMap::<Particle>::read_from_file("data/output/out.particlemap").unwrap();
 
         assert!(map.is_same(&map2));
     }
