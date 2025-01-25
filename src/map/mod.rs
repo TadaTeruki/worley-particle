@@ -14,6 +14,8 @@ pub mod particlemap {
 
 pub mod network;
 
+static RW_SPLITTER: &str = "|";
+
 pub trait ParticleMapAttribute: Debug + Clone + PartialEq {}
 impl<T: Debug + Clone + PartialEq> ParticleMapAttribute for T {}
 
@@ -109,12 +111,12 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
 }
 
 pub trait ParticleMapAttributeRW: ParticleMapAttribute {
-    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>>;
-    fn to_string(&self) -> String;
+    fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>>;
+    fn to_strings(&self) -> Vec<String>;
 }
 
 impl ParticleMapAttributeRW for f64 {
-    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+    fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         if let &[value] = s {
             Ok(value.parse()?)
         } else {
@@ -122,23 +124,23 @@ impl ParticleMapAttributeRW for f64 {
         }
     }
 
-    fn to_string(&self) -> String {
-        ToString::to_string(self)
+    fn to_strings(&self) -> Vec<String> {
+        vec![self.to_string()]
     }
 }
 
 impl ParticleMapAttributeRW for String {
-    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+    fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         Ok(s.join(","))
     }
 
-    fn to_string(&self) -> String {
-        self.clone()
+    fn to_strings(&self) -> Vec<String> {
+        vec![self.clone()]
     }
 }
 
 impl ParticleMapAttributeRW for ParticleParameters {
-    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+    fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>> {
         if let &[seed, min_randomness, max_randomness, scale] = s {
             Ok(Self {
                 seed: seed.parse()?,
@@ -151,44 +153,52 @@ impl ParticleMapAttributeRW for ParticleParameters {
         }
     }
 
-    fn to_string(&self) -> String {
-        format!(
-            "{},{},{},{}",
-            self.seed, self.min_randomness, self.max_randomness, self.scale
-        )
+    fn to_strings(&self) -> Vec<String> {
+        vec![
+            self.seed.to_string(),
+            self.min_randomness.to_string(),
+            self.max_randomness.to_string(),
+            self.scale.to_string(),
+        ]
     }
 }
 
 impl ParticleMapAttributeRW for Particle {
-    fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
-        if let &[x, y, params] = s {
-            Ok(Self::new(
-                x.parse()?,
-                y.parse()?,
-                ParticleParameters::from_str(&[params])?,
-            ))
-        } else {
-            Err("Expected three values".into())
-        }
+    fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+        // if let &[x, y, params] = s {
+        //     Ok(Self::new(
+        //         x.parse()?,
+        //         y.parse()?,
+        //         ParticleParameters::from_strs(&[params])?,
+        //     ))
+        // } else {
+        //     Err("Expected three values".into())
+        //
+        let s_coord = &s[0..2];
+        let s_params = &s[2..];
+
+        Ok(Self::new(
+            s_coord[0].parse()?,
+            s_coord[1].parse()?,
+            ParticleParameters::from_strs(s_params)?,
+        ))
     }
 
-    fn to_string(&self) -> String {
-        format!(
-            "{},{},{}",
-            self.grid.0,
-            self.grid.1,
-            self.params.to_string()
-        )
+    fn to_strings(&self) -> Vec<String> {
+        vec![self.grid.0.to_string(), self.grid.1.to_string()]
+            .into_iter()
+            .chain(self.params.to_strings().into_iter())
+            .collect()
     }
 }
 
 impl ParticleMapAttributeRW for () {
-    fn from_str(_: &[&str]) -> Result<Self, Box<dyn Error>> {
+    fn from_strs(_: &[&str]) -> Result<Self, Box<dyn Error>> {
         Ok(())
     }
 
-    fn to_string(&self) -> String {
-        "".to_string()
+    fn to_strings(&self) -> Vec<String> {
+        vec![]
     }
 }
 
@@ -212,7 +222,7 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
             .particles
             .iter()
             .map(|particle| {
-                let value = T::from_str(&particle.value.split(',').collect::<Vec<_>>())?;
+                let value = T::from_strs(&particle.value.split(RW_SPLITTER).collect::<Vec<_>>())?;
                 Ok((Particle::new(particle.x, particle.y, params), value))
             })
             .collect::<Result<HashMap<Particle, T>, Box<dyn Error>>>()?;
@@ -234,7 +244,7 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
                 .map(|(particle, value)| MsgParticle {
                     x: particle.grid.0,
                     y: particle.grid.1,
-                    value: value.to_string(),
+                    value: value.to_strings().join(RW_SPLITTER),
                 })
                 .collect(),
         };
@@ -622,7 +632,7 @@ mod tests {
     }
 
     impl ParticleMapAttributeRW for TestAttribute {
-        fn from_str(s: &[&str]) -> Result<Self, Box<dyn Error>> {
+        fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>> {
             if let &[value, name] = s {
                 Ok(Self {
                     value: value.parse()?,
@@ -633,8 +643,8 @@ mod tests {
             }
         }
 
-        fn to_string(&self) -> String {
-            format!("{},{}", self.value, self.name)
+        fn to_strings(&self) -> Vec<String> {
+            vec![self.value.to_string(), self.name.clone()]
         }
     }
 
