@@ -113,6 +113,7 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
 pub trait ParticleMapAttributeRW: ParticleMapAttribute {
     fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>>;
     fn to_strings(&self) -> Vec<String>;
+    fn len_strs() -> usize;
 }
 
 impl ParticleMapAttributeRW for f64 {
@@ -127,6 +128,10 @@ impl ParticleMapAttributeRW for f64 {
     fn to_strings(&self) -> Vec<String> {
         vec![self.to_string()]
     }
+
+    fn len_strs() -> usize {
+        1
+    }
 }
 
 impl ParticleMapAttributeRW for String {
@@ -136,6 +141,10 @@ impl ParticleMapAttributeRW for String {
 
     fn to_strings(&self) -> Vec<String> {
         vec![self.clone()]
+    }
+
+    fn len_strs() -> usize {
+        1
     }
 }
 
@@ -161,19 +170,14 @@ impl ParticleMapAttributeRW for ParticleParameters {
             self.scale.to_string(),
         ]
     }
+
+    fn len_strs() -> usize {
+        4
+    }
 }
 
 impl ParticleMapAttributeRW for Particle {
     fn from_strs(s: &[&str]) -> Result<Self, Box<dyn Error>> {
-        // if let &[x, y, params] = s {
-        //     Ok(Self::new(
-        //         x.parse()?,
-        //         y.parse()?,
-        //         ParticleParameters::from_strs(&[params])?,
-        //     ))
-        // } else {
-        //     Err("Expected three values".into())
-        //
         let s_coord = &s[0..2];
         let s_params = &s[2..];
 
@@ -190,6 +194,10 @@ impl ParticleMapAttributeRW for Particle {
             .chain(self.params.to_strings().into_iter())
             .collect()
     }
+
+    fn len_strs() -> usize {
+        2 + ParticleParameters::len_strs()
+    }
 }
 
 impl ParticleMapAttributeRW for () {
@@ -199,6 +207,10 @@ impl ParticleMapAttributeRW for () {
 
     fn to_strings(&self) -> Vec<String> {
         vec![]
+    }
+
+    fn len_strs() -> usize {
+        0
     }
 }
 
@@ -645,6 +657,10 @@ mod tests {
 
         fn to_strings(&self) -> Vec<String> {
             vec![self.value.to_string(), self.name.clone()]
+        }
+
+        fn len_strs() -> usize {
+            2
         }
     }
 
