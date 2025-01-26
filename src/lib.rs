@@ -112,14 +112,14 @@ pub enum GenerationRuleError {
 pub struct ParticleParameters {
     /// Minimum randomness of the feature point (in [0.0, 1.0]).
     /// randomness <= 0.5 is recommended for better performance and stability.
-    min_randomness: f64,
+    pub min_randomness: f64,
     /// Maximum randomness of the feature point (in [0.0, 1.0]).
     /// randomness <= 0.5 is recommended for better performance and stability.
-    max_randomness: f64,
+    pub max_randomness: f64,
     /// Scale of the grid.
-    scale: f64,
+    pub scale: f64,
     /// The seed of the random number generator.
-    seed: u64,
+    pub seed: u64,
 }
 
 impl Hash for ParticleParameters {
@@ -157,7 +157,7 @@ impl ParticleParameters {
             .set_seed(seed)
     }
 
-    pub fn set_randomness(
+    fn set_randomness(
         mut self,
         min_randomness: f64,
         max_randomness: f64,
@@ -170,7 +170,7 @@ impl ParticleParameters {
         Ok(self)
     }
 
-    pub fn set_scale(mut self, scale: f64) -> Result<Self, GenerationRuleError> {
+    fn set_scale(mut self, scale: f64) -> Result<Self, GenerationRuleError> {
         if scale <= 0.0 {
             return Err(GenerationRuleError::InvalidScale);
         }
@@ -178,17 +178,9 @@ impl ParticleParameters {
         Ok(self)
     }
 
-    pub fn set_seed(mut self, seed: u64) -> Result<Self, GenerationRuleError> {
+    fn set_seed(mut self, seed: u64) -> Result<Self, GenerationRuleError> {
         self.seed = seed;
         Ok(self)
-    }
-
-    pub fn get_randomness(&self) -> (f64, f64) {
-        (self.min_randomness, self.max_randomness)
-    }
-
-    pub fn get_scale(&self) -> f64 {
-        self.scale
     }
 }
 
