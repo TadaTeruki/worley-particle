@@ -1,0 +1,191 @@
+use crate::{Particle, ParticleParameters};
+
+use super::{ParticleMap, ParticleMapAttribute};
+
+pub mod vertorization;
+
+pub trait ParticleMapAttributeLerp: ParticleMapAttribute + Default {
+    fn lerp(&self, other: &Self, t: f64) -> Self;
+}
+
+impl ParticleMapAttributeLerp for f64 {
+    fn lerp(&self, other: &Self, t: f64) -> Self {
+        self + (other - self) * t
+    }
+}
+
+impl ParticleMapAttributeLerp for () {
+    fn lerp(&self, _: &Self, _: f64) -> Self {
+        ()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct IDWStrategy {
+    pub sample_min_distance: f64,
+    pub sample_max_distance: f64,
+    pub weight_power: f64,
+    pub smooth_power: Option<f64>,
+}
+
+impl IDWStrategy {
+    pub fn default_from_params(params: &ParticleParameters) -> Self {
+        Self {
+            sample_min_distance: params.scale * 1e-6,
+            sample_max_distance: params.scale * 1.415,
+            weight_power: 1.5,
+            smooth_power: Some(1.0),
+        }
+    }
+}
+
+impl Default for IDWStrategy {
+    fn default() -> Self {
+        Self {
+            sample_min_distance: 1e-6,
+            sample_max_distance: f64::INFINITY,
+            weight_power: 1.5,
+            smooth_power: Some(1.0),
+        }
+    }
+}
+
+pub enum InterpolationMethod {
+    Nearest,
+    IDW(IDWStrategy),
+    IDWSeparated(IDWStrategy),
+}
+
+impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
+    fn calculate_idw_weight(
+        x: f64,
+        y: f64,
+        site: (f64, f64),
+        sample_max_distance: f64,
+        weight_power: f64,
+        smooth_power: Option<f64>,
+    ) -> Option<f64> {
+        let distance = ((x - site.0).powi(2) + (y - site.1).powi(2)).sqrt();
+        if distance > sample_max_distance {
+            return None;
+        }
+        let weight = if let Some(smooth_power) = smooth_power {
+            (1.0 - (distance / sample_max_distance).powf(smooth_power))
+                / distance.powf(weight_power)
+        } else {
+            distance.powf(-weight_power)
+        };
+
+        Some(weight)
+    }
+
+    pub fn get_interpolated(&self, x: f64, y: f64, method: &InterpolationMethod) -> Option<T> {
+        match method {
+            InterpolationMethod::Nearest => {
+                let particle = Particle::from(x, y, self.params);
+                self.particles.get(&particle).cloned()
+            }
+            InterpolationMethod::IDW(strategy) => {
+                let mut total_value: Option<T> = None;
+                let mut tmp_weight = 0.0;
+                let inside: Vec<Particle> =
+                    Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
+                let particles_iter = inside.iter().filter_map(|particle| {
+                    self.particles.get(particle).map(|value| (particle, value))
+                });
+                for (particle, value) in particles_iter {
+                    let weight = Self::calculate_idw_weight(
+                        x,
+                        y,
+                        particle.site(),
+                        strategy.sample_max_distance,
+                        strategy.weight_power,
+                        strategy.smooth_power,
+                    );
+                    if let Some(weight) = weight {
+                        tmp_weight += weight;
+                        if let Some(total_value) = total_value.as_mut() {
+                            *total_value = total_value.lerp(value, weight / tmp_weight);
+                        } else {
+                            total_value = Some(value.clone());
+                        }
+                    }
+                }
+
+                total_value
+            }
+            InterpolationMethod::IDWSeparated(strategy) => {
+                let inside =
+                    Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
+                let particles_iter = inside.iter().filter_map(|particle| {
+                    self.particles.get(particle).map(|value| (particle, value))
+                });
+                let weights_iter = particles_iter.filter_map(|(particle, _)| {
+                    Self::calculate_idw_weight(
+                        x,
+                        y,
+                        particle.site(),
+                        strategy.sample_max_distance,
+                        strategy.weight_power,
+                        strategy.smooth_power,
+                    )
+                    .map(|weight| (particle, weight))
+                });
+
+                let self_particle = Particle::from(x, y, self.params);
+
+                let weight_sum = weights_iter.clone().map(|(_, weight)| weight).sum::<f64>();
+                let mut total_value: Option<T> = None;
+                let mut tmp_weight = 0.0;
+                for (particle, weight) in weights_iter {
+                    let (value, weight) = if particle == &self_particle {
+                        (
+                            self.particles.get(particle).unwrap(),
+                            (weight / weight_sum - 0.5).max(0.0),
+                        )
+                    } else {
+                        (&T::default(), weight / weight_sum)
+                    };
+                    tmp_weight += weight;
+                    if tmp_weight <= 0.0 {
+                        continue;
+                    }
+                    if let Some(total_value) = total_value.as_mut() {
+                        *total_value = total_value.lerp(value, weight / tmp_weight);
+                    } else {
+                        total_value = Some(value.clone());
+                    }
+                }
+
+                total_value
+            }
+        }
+    }
+
+    pub fn rasterise(
+        &self,
+        img_width: usize,
+        img_height: usize,
+        corners: ((f64, f64), (f64, f64)),
+        interp_method: &InterpolationMethod,
+    ) -> Vec<Vec<Option<T>>> {
+        let ((mut min_x, mut min_y), (mut max_x, mut max_y)) = corners;
+        if min_x > max_x {
+            std::mem::swap(&mut min_x, &mut max_x);
+        }
+        if min_y > max_y {
+            std::mem::swap(&mut min_y, &mut max_y);
+        }
+        let mut raster = vec![vec![None; img_width]; img_height];
+
+        for (iy, item) in raster.iter_mut().enumerate().take(img_height) {
+            for (ix, item) in item.iter_mut().enumerate().take(img_width) {
+                let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
+                let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
+                *item = self.get_interpolated(x, y, interp_method);
+            }
+        }
+
+        raster
+    }
+}
