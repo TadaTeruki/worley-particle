@@ -1,11 +1,14 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use internal_util::{arg_cmp, circumcenter, get_grid, get_grids_around, get_grids_wide_around, hash_2d, site_point_from_hash, square_distance};
+use internal_util::{
+    arg_cmp, circumcenter, get_grid, get_grids_around, get_grids_wide_around, hash_2d,
+    site_point_from_hash, square_distance,
+};
 use thiserror::Error;
 
+mod internal_util;
 #[cfg(feature = "particlemap")]
 pub mod map;
-mod internal_util;
 
 #[derive(Debug, Error)]
 pub enum GenerationRuleError {

@@ -1,6 +1,7 @@
 use crate::{Particle, ParticleParameters};
 use std::{collections::HashMap, fmt::Debug};
 
+pub mod grad;
 pub mod lerp;
 pub mod network;
 pub mod rw;
