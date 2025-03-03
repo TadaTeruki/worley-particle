@@ -157,7 +157,7 @@ impl ParticleParameters {
             .set_seed(seed)
     }
 
-    fn set_randomness(
+    pub fn set_randomness(
         mut self,
         min_randomness: f64,
         max_randomness: f64,
@@ -170,7 +170,7 @@ impl ParticleParameters {
         Ok(self)
     }
 
-    fn set_scale(mut self, scale: f64) -> Result<Self, GenerationRuleError> {
+    pub fn set_scale(mut self, scale: f64) -> Result<Self, GenerationRuleError> {
         if scale <= 0.0 {
             return Err(GenerationRuleError::InvalidScale);
         }
@@ -178,7 +178,7 @@ impl ParticleParameters {
         Ok(self)
     }
 
-    fn set_seed(mut self, seed: u64) -> Result<Self, GenerationRuleError> {
+    pub fn set_seed(mut self, seed: u64) -> Result<Self, GenerationRuleError> {
         self.seed = seed;
         Ok(self)
     }
