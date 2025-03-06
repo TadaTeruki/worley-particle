@@ -35,6 +35,37 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         self.particles.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Particle, &mut T)> {
+        self.particles.iter_mut()
+    }
+
+    pub fn insert(&mut self, particle: Particle, value: T) {
+        self.particles.insert(particle, value);
+    }
+
+    pub fn remove(&mut self, particle: &Particle) -> Option<T> {
+        self.particles.remove(particle)
+    }
+
+    pub fn get_mut(&mut self, particle: &Particle) -> Option<&mut T> {
+        self.particles.get_mut(particle)
+    }
+
+    pub fn get_or_insert_with(&mut self, particle: Particle, f: impl FnOnce() -> T) -> &mut T {
+        self.particles.entry(particle).or_insert_with(f)
+    }
+
+    pub fn get_or_insert(&mut self, particle: Particle, value: T) -> &mut T {
+        self.particles.entry(particle).or_insert(value)
+    }
+
+    pub fn get_or_insert_default(&mut self, particle: Particle) -> &mut T
+    where
+        T: Default,
+    {
+        self.particles.entry(particle).or_insert_with(T::default)
+    }
+
     pub fn sites(&self) -> Vec<(f64, f64)> {
         self.particles
             .keys()
