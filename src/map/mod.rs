@@ -30,8 +30,17 @@ impl<T: ParticleMapAttribute> FromIterator<(Particle, T)> for ParticleMap<T> {
 }
 
 impl<T: ParticleMapAttribute> ParticleMap<T> {
+    /// Create a new particle map with the given parameters and particles.
+    ///
+    /// Note that the particles with different parameters will be ignored.
     pub fn new(params: ParticleParameters, particles: HashMap<Particle, T>) -> Self {
-        Self { params, particles }
+        Self {
+            params,
+            particles: particles
+                .into_iter()
+                .filter(|(particle, _)| particle.params == params)
+                .collect(),
+        }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&Particle, &T)> {
