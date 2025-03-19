@@ -59,6 +59,14 @@ impl DisjointSet {
         }
     }
 
+    #[cfg(test)]
+    fn is_same_set(&mut self, x: Particle, y: Particle) -> bool {
+        match (self.find(x), self.find(y)) {
+            (Some(x_root), Some(y_root)) => x_root == y_root,
+            _ => false,
+        }
+    }
+
     fn get_set_elements(&mut self, x: Particle) -> Vec<Particle> {
         let x_root = match self.find(x) {
             Some(root) => root,
