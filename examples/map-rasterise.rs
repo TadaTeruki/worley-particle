@@ -16,14 +16,53 @@ fn main() {
 
     let map = ParticleMap::new(params, cells.into_iter().zip(values).collect());
 
-    let image_width = 500;
-    let image_height = 500;
+    save_rasterised_map(&map, "data/output/map-rasterise.png", 500, 500, &params);
 
+    let rough_params = ParticleParameters::new(0.8, 0.8, 0.7, 0).unwrap();
+    let rough_map = map
+        .map_with_another_params_iter(
+            InterpolationMethod::IDW(IDWStrategy::default_from_params(&params)),
+            rough_params,
+        )
+        .collect::<ParticleMap<f64>>();
+
+    save_rasterised_map(
+        &rough_map,
+        "data/output/map-rasterise-rough.png",
+        500,
+        500,
+        &rough_params,
+    );
+
+    let fine_params = ParticleParameters::new(0.8, 0.8, 0.1, 0).unwrap();
+    let fine_map = map
+        .map_with_another_params_iter(
+            InterpolationMethod::IDW(IDWStrategy::default_from_params(&params)),
+            fine_params,
+        )
+        .collect::<ParticleMap<f64>>();
+
+    save_rasterised_map(
+        &fine_map,
+        "data/output/map-rasterise-fine.png",
+        500,
+        500,
+        &fine_params,
+    );
+}
+
+fn save_rasterised_map(
+    map: &ParticleMap<f64>,
+    filename: &str,
+    image_width: usize,
+    image_height: usize,
+    params: &ParticleParameters,
+) {
     let raster = map.rasterise(
         image_width,
         image_height,
         map.corners(),
-        &InterpolationMethod::IDWSeparated(IDWStrategy::default_from_params(&params)),
+        InterpolationMethod::IDW(IDWStrategy::default_from_params(params)),
     );
 
     let mut image_buf = image::RgbImage::new(image_width as u32, image_height as u32);
@@ -39,5 +78,5 @@ fn main() {
         }
     }
 
-    image_buf.save("data/output/map-rasterise.png").unwrap();
+    image_buf.save(filename).unwrap();
 }

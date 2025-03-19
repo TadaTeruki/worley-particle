@@ -132,6 +132,7 @@ impl Hash for Particle {
 impl Eq for Particle {}
 
 impl Particle {
+    /// Generate a particle from the grid.
     pub fn new(grid_x: i64, grid_y: i64, params: ParticleParameters) -> Self {
         Self {
             grid: (grid_x, grid_y),
@@ -139,6 +140,7 @@ impl Particle {
         }
     }
 
+    /// Generate a particle from the point.
     pub fn from(x: f64, y: f64, params: ParticleParameters) -> Self {
         let (ix, iy) = get_grid(x / params.scale, y / params.scale);
         let ptc = Self::new(ix, iy, params);
@@ -157,12 +159,14 @@ impl Particle {
         best_ptc
     }
 
+    /// Get the hash value of the particle as u64.
     pub fn hash_u64(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         hasher.finish()
     }
 
+    /// Get the site point of the particle.
     pub fn site(&self) -> (f64, f64) {
         let rel_core = site_point_from_hash(
             hash_2d(self.grid.0, self.grid.1, self.params.seed),
@@ -175,6 +179,7 @@ impl Particle {
         )
     }
 
+    /// Generate particles inside the circle.
     pub fn from_inside_radius(
         x: f64,
         y: f64,
@@ -199,6 +204,7 @@ impl Particle {
         surroundings
     }
 
+    /// Generate particles inside the square.
     pub fn from_inside_square(x: f64, y: f64, params: ParticleParameters, side: f64) -> Vec<Self> {
         let (corner_min_x, corner_min_y) =
             get_grid((x - side) / params.scale, (y - side) / params.scale);
@@ -213,6 +219,59 @@ impl Particle {
         }
 
         surroundings
+    }
+
+    /// Generate particles inside the another particle.
+    pub fn from_inside_particle(params: ParticleParameters, range_particle: Particle) -> Vec<Self> {
+        let range_voronoi = range_particle.calculate_voronoi().polygon;
+        let range_x_min = range_voronoi
+            .iter()
+            .map(|x| x.0)
+            .min_by(|a, b| a.total_cmp(b));
+        let range_x_max = range_voronoi
+            .iter()
+            .map(|x| x.0)
+            .max_by(|a, b| a.total_cmp(b));
+        let range_y_min = range_voronoi
+            .iter()
+            .map(|x| x.1)
+            .min_by(|a, b| a.total_cmp(b));
+        let range_y_max = range_voronoi
+            .iter()
+            .map(|x| x.1)
+            .max_by(|a, b| a.total_cmp(b));
+
+        let (corner_min_x, corner_min_y) =
+            if let (Some(range_x_min), Some(range_y_min)) = (range_x_min, range_y_min) {
+                get_grid(range_x_min / params.scale, range_y_min / params.scale)
+            } else {
+                return vec![];
+            };
+
+        let (corner_max_x, corner_max_y) =
+            if let (Some(range_x_max), Some(range_y_max)) = (range_x_max, range_y_max) {
+                get_grid(range_x_max / params.scale, range_y_max / params.scale)
+            } else {
+                return vec![];
+            };
+
+        let mut surroundings = Vec::new();
+        for iy in corner_min_y..=corner_max_y {
+            for ix in corner_min_x..=corner_max_x {
+                let ptc = Self::new(ix, iy, params);
+                let (x, y) = ptc.site();
+                if range_particle.is_inside(x, y) {
+                    surroundings.push(ptc);
+                }
+            }
+        }
+
+        surroundings
+    }
+
+    /// Check if the point is inside the particle.
+    pub fn is_inside(&self, x: f64, y: f64) -> bool {
+        Self::from(x, y, self.params) == *self
     }
 
     /// Get the voronoi cell.
@@ -319,10 +378,12 @@ impl Particle {
         }
     }
 
+    /// Get the parameters of the particle.
     pub fn params(&self) -> ParticleParameters {
         self.params
     }
 
+    /// Get the grid number of the particle.
     pub fn grid(&self) -> (i64, i64) {
         self.grid
     }

@@ -186,12 +186,29 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
         }
     }
 
+    pub fn map_with_another_params_iter(
+        &self,
+        interp_method: InterpolationMethod,
+        another_params: ParticleParameters,
+    ) -> impl Iterator<Item = (Particle, T)> + '_ {
+        self.particles
+            .iter()
+            .flat_map(move |(&range_particle, _)| {
+                Particle::from_inside_particle(another_params, range_particle)
+            })
+            .filter_map(move |particle| {
+                let (x, y) = particle.site();
+                let value = self.get_interpolated(x, y, &interp_method)?;
+                Some((particle, value))
+            })
+    }
+
     pub fn rasterise(
         &self,
         img_width: usize,
         img_height: usize,
         corners: ((f64, f64), (f64, f64)),
-        interp_method: &InterpolationMethod,
+        interp_method: InterpolationMethod,
     ) -> Vec<Vec<Option<T>>> {
         let ((mut min_x, mut min_y), (mut max_x, mut max_y)) = corners;
         if min_x > max_x {
@@ -206,7 +223,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
             for (ix, item) in item.iter_mut().enumerate().take(img_width) {
                 let x = min_x + (max_x - min_x) * ix as f64 / img_width as f64;
                 let y = min_y + (max_y - min_y) * iy as f64 / img_height as f64;
-                *item = self.get_interpolated(x, y, interp_method);
+                *item = self.get_interpolated(x, y, &interp_method);
             }
         }
 

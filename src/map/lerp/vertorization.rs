@@ -23,7 +23,7 @@ impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
         corners: ((f64, f64), (f64, f64)),
         rasterise_scale: f64,
         thresholds: &[f64],
-        interp_method: &InterpolationMethod,
+        interp_method: InterpolationMethod,
         smooth: bool,
     ) -> Result<Vec<Band>, Box<dyn Error>> {
         let ((original_min_x, original_min_y), (original_max_x, original_max_y)) = corners;
@@ -145,7 +145,7 @@ impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
         corners: ((f64, f64), (f64, f64)),
         rasterise_scale: f64,
         thresholds: &[f64],
-        interp_method: &InterpolationMethod,
+        interp_method: InterpolationMethod,
         smooth: bool,
     ) -> Result<Vec<Band>, Box<dyn Error>> {
         self.vectorize(
@@ -163,7 +163,7 @@ impl<T: ParticleMapAttributeLerp + Into<f64>> ParticleMap<T> {
         corners: ((f64, f64), (f64, f64)),
         rasterise_scale: f64,
         thresholds: &[f64],
-        interp_method: &InterpolationMethod,
+        interp_method: InterpolationMethod,
         smooth: bool,
     ) -> Result<Vec<Band>, Box<dyn Error>> {
         self.vectorize(
