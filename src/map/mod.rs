@@ -38,37 +38,6 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         self.particles.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Particle, &mut T)> {
-        self.particles.iter_mut()
-    }
-
-    pub fn insert(&mut self, particle: Particle, value: T) {
-        self.particles.insert(particle, value);
-    }
-
-    pub fn remove(&mut self, particle: &Particle) -> Option<T> {
-        self.particles.remove(particle)
-    }
-
-    pub fn get_mut(&mut self, particle: &Particle) -> Option<&mut T> {
-        self.particles.get_mut(particle)
-    }
-
-    pub fn get_or_insert_with(&mut self, particle: Particle, f: impl FnOnce() -> T) -> &mut T {
-        self.particles.entry(particle).or_insert_with(f)
-    }
-
-    pub fn get_or_insert(&mut self, particle: Particle, value: T) -> &mut T {
-        self.particles.entry(particle).or_insert(value)
-    }
-
-    pub fn get_or_insert_default(&mut self, particle: Particle) -> &mut T
-    where
-        T: Default,
-    {
-        self.particles.entry(particle).or_insert_with(T::default)
-    }
-
     /// Get the sites of the particles in the map.
     pub fn sites(&self) -> Vec<(f64, f64)> {
         self.particles
@@ -208,16 +177,13 @@ mod tests {
 
         let p1 = Particle::new(0, 0, params);
         let p2 = Particle::new(1, 0, params);
-        let mut map1 = ParticleMap::new(params, HashMap::new());
-        map1.insert(p1, "A");
-        map1.insert(p2, "B");
+        let hash_map = vec![(p1, "A"), (p2, "B")].into_iter().collect();
+        let map1 = ParticleMap::new(params, hash_map);
 
         let p3 = Particle::new(0, 1, params);
         let p4 = Particle::new(1, 1, params);
-        let mut map2 = ParticleMap::new(params, HashMap::new());
-        map2.insert(p2, "X");
-        map2.insert(p3, "C");
-        map2.insert(p4, "D");
+        let hash_map = vec![(p2, "X"), (p3, "C"), (p4, "D")].into_iter().collect();
+        let map2 = ParticleMap::new(params, hash_map);
 
         let chained = map1.chain(&map2);
         assert!(chained.is_some());
@@ -230,8 +196,11 @@ mod tests {
         assert_eq!(chained.get(&p4), Some(&"D"));
 
         let different_params = ParticleParameters::new(0.3, 0.3, 1.0, 0).unwrap();
-        let mut map3 = ParticleMap::new(different_params, HashMap::new());
-        map3.insert(Particle::new(0, 0, different_params), "E");
+        let hash_map = vec![(Particle::new(0, 0, different_params), "E")]
+            .into_iter()
+            .collect();
+
+        let map3 = ParticleMap::new(different_params, hash_map);
 
         let chained = map1.chain(&map3);
         assert!(chained.is_none());
@@ -247,12 +216,11 @@ mod tests {
         let p4 = Particle::new(3, 3, params);
         let p5 = Particle::new(4, 3, params);
 
-        let mut map = ParticleMap::new(params, HashMap::new());
-        map.insert(p1, 1);
-        map.insert(p2, 2);
-        map.insert(p3, 3);
-        map.insert(p4, 4);
-        map.insert(p5, 5);
+        let hash_map = vec![(p1, 1), (p2, 2), (p3, 3), (p4, 4), (p5, 5)]
+            .into_iter()
+            .collect();
+
+        let map = ParticleMap::new(params, hash_map);
 
         let clusters = map.divide_into_clusters();
 
