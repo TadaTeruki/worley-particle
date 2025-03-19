@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{Particle, ParticleParameters};
 
 use super::{ParticleMap, ParticleMapAttribute};
@@ -184,6 +186,47 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 total_value
             }
         }
+    }
+
+    /// Chain the map with another map.
+    /// If the parameters are different, the second map will be interpolated to the first map.
+    /// The particles in the second map which are already in the first map will be ignored.
+    pub fn force_chain_with_interpolation(
+        &self,
+        second: &Self,
+        interp_method: InterpolationMethod,
+    ) -> Self {
+        let second = if self.params == second.params {
+            second
+        } else {
+            &second
+                .map_with_another_params_iter(interp_method, self.params.clone())
+                .collect::<ParticleMap<_>>()
+        };
+
+        let second = second.iter().filter_map(|(particle, value)| {
+            if self.particles.contains_key(particle) {
+                None
+            } else {
+                Some((*particle, value.clone()))
+            }
+        });
+
+        let map = self
+            .particles
+            .clone()
+            .into_iter()
+            .chain(second)
+            .collect::<HashMap<_, _>>();
+
+        Self::new(self.params.clone(), map)
+    }
+
+    /// Chain the map with another map if the parameters are same.
+    /// If the parameters are different, the second map will be interpolated with nearest method to the first map.
+    /// The particles in the second map which are already in the first map will be ignored.
+    pub fn force_chain(&self, second: &Self) -> Self {
+        self.force_chain_with_interpolation(second, InterpolationMethod::Nearest)
     }
 
     pub fn map_with_another_params_iter(
