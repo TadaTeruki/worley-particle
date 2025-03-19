@@ -4,8 +4,8 @@ use worley_particle::{
 };
 
 fn main() {
-    let mut params = ParticleParameters::new(0.5, 0.5, 1.0, 0).unwrap();
-    let cells = Particle::from_inside_radius(0.0, 0.0, params, 10.0);
+    let mut params = ParticleParameters::new(0.8, 0.8, 1.0, 0).unwrap();
+    let cells = Particle::from_inside_radius(0.0, 0.0, params, 5.0);
     let values = cells
         .iter()
         .map(|cell| (cell.hash_u64() % 10) as f64 * 0.1)
@@ -14,7 +14,7 @@ fn main() {
     let mut map = ParticleMap::new(params, cells.into_iter().zip(values).collect());
 
     for _ in 0..3 {
-        params.scale *= 0.5;
+        params.scale *= 0.25;
         map = map
             .map_with_another_params_iter(InterpolationMethod::Nearest, params)
             .collect::<ParticleMap<f64>>();
