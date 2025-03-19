@@ -66,6 +66,7 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         self.particles.entry(particle).or_insert_with(T::default)
     }
 
+    /// Get the sites of the particles in the map.
     pub fn sites(&self) -> Vec<(f64, f64)> {
         self.particles
             .keys()
@@ -73,14 +74,17 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
             .collect()
     }
 
+    /// Get the parameters of the particle map.
     pub fn params(&self) -> &ParticleParameters {
         &self.params
     }
 
+    /// Get the value of the particle at the given site.
     pub fn get(&self, particle: &Particle) -> Option<&T> {
         self.particles.get(particle)
     }
 
+    /// Get corner coordinates of the range of the registered particles.
     pub fn corners(&self) -> ((f64, f64), (f64, f64)) {
         let particle_sites = self
             .particles
@@ -109,6 +113,31 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
             .fold(f64::MIN, |acc, y| acc.max(y));
 
         ((min_x, min_y), (max_x, max_y))
+    }
+
+    /// Chain the map with another map if the parameters are same.
+    /// The particles in the second map which are already in the first map will be ignored.
+    pub fn chain(&self, second: &Self) -> Option<Self> {
+        if self.params != second.params {
+            return None;
+        }
+
+        let second = second.iter().filter_map(|(particle, value)| {
+            if self.particles.contains_key(particle) {
+                None
+            } else {
+                Some((*particle, value.clone()))
+            }
+        });
+
+        let map = self
+            .particles
+            .clone()
+            .into_iter()
+            .chain(second)
+            .collect::<HashMap<_, _>>();
+
+        Some(Self::new(self.params.clone(), map))
     }
 
     #[allow(dead_code)]
