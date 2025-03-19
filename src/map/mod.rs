@@ -1,6 +1,9 @@
+use algorithm::disjoint_set::DisjointSet;
+
 use crate::{Particle, ParticleParameters};
 use std::{collections::HashMap, fmt::Debug};
 
+mod algorithm;
 pub mod grad;
 pub mod lerp;
 pub mod network;
@@ -140,6 +143,40 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         Some(Self::new(self.params.clone(), map))
     }
 
+    /// Divide the map into clusters of connected particles.
+    pub fn divide_into_clusters(&self) -> Vec<Self> {
+        let keys = self.particles.keys().cloned().collect::<Vec<_>>();
+        let mut disjoint_set = DisjointSet::new(&keys.clone());
+
+        for &particle in &keys {
+            for neighbor in particle.calculate_voronoi().neighbors {
+                if self.particles.contains_key(&neighbor) {
+                    disjoint_set.union(particle, neighbor);
+                }
+            }
+        }
+
+        let sets = disjoint_set.get_all_sets();
+
+        let maps = sets
+            .into_iter()
+            .map(|set| {
+                let particles = set
+                    .into_iter()
+                    .filter_map(|particle| {
+                        self.particles
+                            .get(&particle)
+                            .map(|value| (particle, value.clone()))
+                    })
+                    .collect::<HashMap<_, _>>();
+
+                Self::new(self.params.clone(), particles)
+            })
+            .collect();
+
+        maps
+    }
+
     #[allow(dead_code)]
     fn is_same(&self, other: &Self) -> bool {
         if self.particles.len() != other.particles.len() {
@@ -157,5 +194,86 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Particle;
+
+    #[test]
+    fn test_chain() {
+        let params = ParticleParameters::default();
+
+        let p1 = Particle::new(0, 0, params);
+        let p2 = Particle::new(1, 0, params);
+        let mut map1 = ParticleMap::new(params, HashMap::new());
+        map1.insert(p1, "A");
+        map1.insert(p2, "B");
+
+        let p3 = Particle::new(0, 1, params);
+        let p4 = Particle::new(1, 1, params);
+        let mut map2 = ParticleMap::new(params, HashMap::new());
+        map2.insert(p2, "X");
+        map2.insert(p3, "C");
+        map2.insert(p4, "D");
+
+        let chained = map1.chain(&map2);
+        assert!(chained.is_some());
+        let chained = chained.unwrap();
+
+        assert_eq!(chained.particles.len(), 4);
+        assert_eq!(chained.get(&p1), Some(&"A"));
+        assert_eq!(chained.get(&p2), Some(&"B"));
+        assert_eq!(chained.get(&p3), Some(&"C"));
+        assert_eq!(chained.get(&p4), Some(&"D"));
+
+        let different_params = ParticleParameters::new(0.3, 0.3, 1.0, 0).unwrap();
+        let mut map3 = ParticleMap::new(different_params, HashMap::new());
+        map3.insert(Particle::new(0, 0, different_params), "E");
+
+        let chained = map1.chain(&map3);
+        assert!(chained.is_none());
+    }
+
+    #[test]
+    fn test_divide_into_clusters() {
+        let params = ParticleParameters::default();
+
+        let p1 = Particle::new(0, 0, params);
+        let p2 = Particle::new(1, 0, params);
+        let p3 = Particle::new(0, 1, params);
+        let p4 = Particle::new(3, 3, params);
+        let p5 = Particle::new(4, 3, params);
+
+        let mut map = ParticleMap::new(params, HashMap::new());
+        map.insert(p1, 1);
+        map.insert(p2, 2);
+        map.insert(p3, 3);
+        map.insert(p4, 4);
+        map.insert(p5, 5);
+
+        let clusters = map.divide_into_clusters();
+
+        assert_eq!(clusters.len(), 2);
+
+        let cluster_sizes: Vec<usize> = clusters
+            .iter()
+            .map(|cluster| cluster.particles.len())
+            .collect();
+        assert!(cluster_sizes.contains(&3));
+        assert!(cluster_sizes.contains(&2));
+
+        for cluster in &clusters {
+            if cluster.particles.len() == 3 {
+                assert!(cluster.get(&p1).is_some());
+                assert!(cluster.get(&p2).is_some());
+                assert!(cluster.get(&p3).is_some());
+            } else if cluster.particles.len() == 2 {
+                assert!(cluster.get(&p4).is_some());
+                assert!(cluster.get(&p5).is_some());
+            }
+        }
     }
 }
