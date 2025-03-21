@@ -243,6 +243,16 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
             }
         }
 
+        let sum = weights.iter().map(|(_, w)| w).sum::<f64>();
+
+        if sum == 0.0 {
+            return None;
+        }
+
+        for (_, w) in &mut weights {
+            *w /= sum;
+        }
+
         if weights.is_empty() {
             None
         } else {
