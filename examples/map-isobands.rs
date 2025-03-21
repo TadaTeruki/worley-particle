@@ -1,8 +1,8 @@
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 use worley_particle::{
     map::{
-        lerp::{vertorization::Band, IDWStrategy, InterpolationMethod},
-        ParticleMap,
+        lerp::{vertorization::Band, InterpolationMethod},
+        IDWStrategy, ParticleMap,
     },
     Particle, ParticleParameters,
 };
