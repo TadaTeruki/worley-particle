@@ -80,6 +80,48 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
         IDWWeight::Inside(weight)
     }
 
+    pub fn calculate_idw_weights(
+        &self,
+        x: f64,
+        y: f64,
+        strategy: &IDWStrategy,
+    ) -> Option<Vec<(Particle, f64)>> {
+        let inside = Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
+        let particles_iter = inside
+            .iter()
+            .filter_map(|particle| self.particles.get(particle).map(|value| (particle, value)));
+
+        let mut weights = vec![];
+
+        for (particle, _) in particles_iter {
+            let weight = Self::calculate_idw_weight(
+                x,
+                y,
+                particle.site(),
+                strategy.sample_max_distance,
+                strategy.tolerance,
+                strategy.weight_power,
+                strategy.smooth_power,
+            );
+
+            match weight {
+                IDWWeight::Inside(w) => {
+                    weights.push((*particle, w));
+                }
+                IDWWeight::Equal => {
+                    return Some(vec![(*particle, 1.0)]);
+                }
+                IDWWeight::Outside => {}
+            }
+        }
+
+        if weights.is_empty() {
+            None
+        } else {
+            Some(weights)
+        }
+    }
+
     pub fn get_interpolated(&self, x: f64, y: f64, method: &InterpolationMethod) -> Option<T> {
         match method {
             InterpolationMethod::Nearest => {
@@ -87,86 +129,34 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 self.particles.get(&particle).cloned()
             }
             InterpolationMethod::IDW(strategy) => {
+                let weights = self.calculate_idw_weights(x, y, strategy)?;
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
-                let inside: Vec<Particle> =
-                    Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
-                let particles_iter = inside.iter().filter_map(|particle| {
-                    self.particles.get(particle).map(|value| (particle, value))
-                });
-                for (particle, value) in particles_iter {
-                    let weight = Self::calculate_idw_weight(
-                        x,
-                        y,
-                        particle.site(),
-                        strategy.sample_max_distance,
-                        strategy.tolerance,
-                        strategy.weight_power,
-                        strategy.smooth_power,
-                    );
-                    match weight {
-                        IDWWeight::Inside(weight) => {
-                            tmp_weight += weight;
-                            if let Some(total_value) = total_value.as_mut() {
-                                *total_value = total_value.lerp(value, weight / tmp_weight);
-                            } else {
-                                total_value = Some(value.clone());
-                            }
-                        }
-                        IDWWeight::Equal => {
-                            total_value = Some(value.clone());
-                            break;
-                        }
-                        IDWWeight::Outside => {}
+
+                for (particle, weight) in weights {
+                    let value = self.particles.get(&particle).unwrap();
+                    tmp_weight += weight;
+
+                    if let Some(total_value) = total_value.as_mut() {
+                        *total_value = total_value.lerp(value, weight / tmp_weight);
+                    } else {
+                        total_value = Some(value.clone());
                     }
                 }
 
                 total_value
             }
             InterpolationMethod::IDWSeparated(strategy) => {
-                let inside =
-                    Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
-                let particles_iter = inside.iter().filter_map(|particle| {
-                    self.particles.get(particle).map(|value| (particle, value))
-                });
-
-                let mut weights = vec![];
-
-                for (particle, _) in particles_iter {
-                    let weight = Self::calculate_idw_weight(
-                        x,
-                        y,
-                        particle.site(),
-                        strategy.sample_max_distance,
-                        strategy.tolerance,
-                        strategy.weight_power,
-                        strategy.smooth_power,
-                    );
-
-                    match weight {
-                        IDWWeight::Inside(weight) => {
-                            weights.push((particle, weight));
-                        }
-                        IDWWeight::Equal => {
-                            return Some(self.particles.get(particle).unwrap().clone());
-                        }
-                        IDWWeight::Outside => {}
-                    }
-                }
-
+                let weights = self.calculate_idw_weights(x, y, strategy)?;
                 let self_particle = Particle::from(x, y, self.params);
 
-                let weight_sum = weights
-                    .iter()
-                    .clone()
-                    .map(|(_, weight)| weight)
-                    .sum::<f64>();
+                let weight_sum = weights.iter().map(|(_, weight)| *weight).sum::<f64>();
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
                 for (particle, weight) in weights {
-                    let (value, weight) = if particle == &self_particle {
+                    let (value, weight) = if particle == self_particle {
                         (
-                            self.particles.get(particle).unwrap(),
+                            self.particles.get(&particle).unwrap(),
                             (weight / weight_sum - 0.5).max(0.0),
                         )
                     } else {
