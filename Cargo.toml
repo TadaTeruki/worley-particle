@@ -15,6 +15,3 @@ thiserror = "2.0.9"
 
 [build-dependencies]
 flatc-rust = "0.2.0"
-
-[features]
-particlemap = []

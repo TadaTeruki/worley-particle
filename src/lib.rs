@@ -7,7 +7,6 @@ use internal_util::{
 use thiserror::Error;
 
 mod internal_util;
-#[cfg(feature = "particlemap")]
 pub mod map;
 
 #[derive(Debug, Error)]
