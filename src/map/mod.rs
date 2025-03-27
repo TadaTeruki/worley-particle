@@ -73,6 +73,11 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         self.particles.iter()
     }
 
+    /// Returns an iterator that clones the keys and values.
+    pub fn cloned_iter(&self) -> impl Iterator<Item = (Particle, T)> + '_ {
+        self.particles.iter().map(|(k, v)| (*k, v.clone()))
+    }
+
     /// Get the sites of the particles in the map.
     pub fn sites(&self) -> Vec<(f64, f64)> {
         self.particles
@@ -129,20 +134,11 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
             return None;
         }
 
-        let second = second.iter().filter_map(|(particle, value)| {
-            if self.particles.contains_key(particle) {
-                None
-            } else {
-                Some((*particle, value.clone()))
-            }
-        });
+        let second = second
+            .cloned_iter()
+            .filter(|(particle, _)| !self.particles.contains_key(particle));
 
-        let map = self
-            .particles
-            .clone()
-            .into_iter()
-            .chain(second)
-            .collect::<HashMap<_, _>>();
+        let map = self.cloned_iter().chain(second).collect::<HashMap<_, _>>();
 
         Some(Self::new(self.params.clone(), map))
     }
@@ -168,9 +164,11 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
                 let particles = set
                     .into_iter()
                     .filter_map(|particle| {
-                        self.particles
-                            .get(&particle)
-                            .map(|value| (particle, value.clone()))
+                        if let Some(value) = self.particles.get(&particle) {
+                            Some((particle, value.clone()))
+                        } else {
+                            None
+                        }
                     })
                     .collect::<HashMap<_, _>>();
 
@@ -217,7 +215,7 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         let inside = Particle::from_inside_square(x, y, self.params, strategy.sample_max_distance);
         let particles_iter = inside
             .iter()
-            .filter_map(|particle| self.particles.get(particle).map(|value| (particle, value)));
+            .filter_map(|particle| self.particles.get(particle).map(|value| (*particle, value)));
 
         let mut weights = vec![];
 
@@ -234,10 +232,10 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
 
             match weight {
                 IDWWeight::Inside(w) => {
-                    weights.push((*particle, w));
+                    weights.push((particle, w));
                 }
                 IDWWeight::Equal => {
-                    return Some(vec![(*particle, 1.0)]);
+                    return Some(vec![(particle, 1.0)]);
                 }
                 IDWWeight::Outside => {}
             }
