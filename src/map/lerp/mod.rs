@@ -17,9 +17,7 @@ impl ParticleMapAttributeLerp for f64 {
 }
 
 impl ParticleMapAttributeLerp for () {
-    fn lerp(&self, _: &Self, _: f64) -> Self {
-        ()
-    }
+    fn lerp(&self, _: &Self, _: f64) -> Self {}
 }
 
 pub enum InterpolationMethod {
@@ -97,7 +95,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
             second
         } else {
             &second
-                .map_with_another_params_iter(interp_method, self.params.clone())
+                .map_with_another_params_iter(interp_method, self.params)
                 .collect::<ParticleMap<_>>()
         };
 
@@ -116,7 +114,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
             .chain(second)
             .collect::<HashMap<_, _>>();
 
-        Self::new(self.params.clone(), map)
+        Self::new(self.params, map)
     }
 
     /// Chain the map with another map if the parameters are same.

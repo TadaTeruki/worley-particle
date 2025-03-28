@@ -45,13 +45,17 @@ impl DisjointSet {
 
         match (self.rank.get(&x_root), self.rank.get(&y_root)) {
             (Some(&x_rank), Some(&y_rank)) => {
-                if x_rank < y_rank {
-                    self.parent.insert(x_root, y_root);
-                } else if x_rank > y_rank {
-                    self.parent.insert(y_root, x_root);
-                } else {
-                    self.parent.insert(y_root, x_root);
-                    self.rank.insert(x_root, x_rank + 1);
+                match x_rank.cmp(&y_rank) {
+                    std::cmp::Ordering::Less => {
+                        self.parent.insert(x_root, y_root);
+                    }
+                    std::cmp::Ordering::Greater => {
+                        self.parent.insert(y_root, x_root);
+                    }
+                    std::cmp::Ordering::Equal => {
+                        self.parent.insert(y_root, x_root);
+                        self.rank.insert(x_root, x_rank + 1);
+                    }
                 }
                 true
             }

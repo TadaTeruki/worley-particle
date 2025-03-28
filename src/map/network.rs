@@ -83,7 +83,7 @@ impl ParticleNetwork {
 
             let neighbors = self.neighbors(current_state.particle);
             let mut next = None;
-            let mut next_evaluation = std::f64::MAX;
+            let mut next_evaluation = f64::MAX;
             for neighbor in neighbors {
                 if parent.contains_key(&neighbor) {
                     continue;
@@ -130,7 +130,7 @@ impl Eq for StateForPathfinding {}
 
 impl PartialOrd for StateForPathfinding {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.cost.partial_cmp(&other.cost)
+        Some(self.cmp(other))
     }
 }
 

@@ -12,6 +12,7 @@ use super::{ParticleMap, ParticleMapAttribute};
 
 #[path = "particlemap_generated.rs"]
 #[allow(dead_code, unused_imports)]
+#[allow(clippy::all)]
 mod particlemap_generated;
 
 static RW_SPLITTER: &str = "|";
@@ -97,7 +98,7 @@ impl ParticleMapAttributeRW for Particle {
     fn to_strings(&self) -> Vec<String> {
         vec![self.grid.0.to_string(), self.grid.1.to_string()]
             .into_iter()
-            .chain(self.params.to_strings().into_iter())
+            .chain(self.params.to_strings())
             .collect()
     }
 

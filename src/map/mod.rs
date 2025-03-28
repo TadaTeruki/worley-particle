@@ -24,7 +24,7 @@ impl<T: ParticleMapAttribute> FromIterator<(Particle, T)> for ParticleMap<T> {
         let params = particles
             .keys()
             .next()
-            .map_or_else(|| ParticleParameters::default(), |particle| particle.params);
+            .map_or_else(ParticleParameters::default, |particle| particle.params);
         Self { params, particles }
     }
 }
@@ -140,7 +140,7 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
 
         let map = self.cloned_iter().chain(second).collect::<HashMap<_, _>>();
 
-        Some(Self::new(self.params.clone(), map))
+        Some(Self::new(self.params, map))
     }
 
     /// Divide the map into clusters of connected particles.
@@ -164,15 +164,13 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
                 let particles = set
                     .into_iter()
                     .filter_map(|particle| {
-                        if let Some(value) = self.particles.get(&particle) {
-                            Some((particle, value.clone()))
-                        } else {
-                            None
-                        }
+                        self.particles
+                            .get(&particle)
+                            .map(|value| (particle, value.clone()))
                     })
                     .collect::<HashMap<_, _>>();
 
-                Self::new(self.params.clone(), particles)
+                Self::new(self.params, particles)
             })
             .collect();
 
@@ -275,6 +273,16 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         }
 
         true
+    }
+}
+
+impl<T: ParticleMapAttribute> From<HashMap<Particle, T>> for ParticleMap<T> {
+    fn from(particles: HashMap<Particle, T>) -> Self {
+        let params = particles
+            .keys()
+            .next()
+            .map_or_else(ParticleParameters::default, |particle| particle.params);
+        Self { params, particles }
     }
 }
 

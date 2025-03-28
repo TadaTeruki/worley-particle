@@ -62,13 +62,13 @@ pub struct GradStrategy {
 
 impl Default for GradStrategy {
     fn default() -> Self {
-        return Self {
+        Self {
             delta: 1e-6,
             direction_type: GradDirectionType::ToDown,
             difference_type: GradDifferenceType::Central,
             iteration: 4,
             sample_num: 8,
-        };
+        }
     }
 }
 
@@ -156,9 +156,7 @@ impl<T: ParticleMapAttributeGrad> ParticleMap<T> {
                 }
             }
 
-            if extreme_value.is_none() {
-                return None;
-            }
+            extreme_value?;
 
             range = (extreme_angle - step * 0.5, extreme_angle + step * 0.5);
             final_angle = extreme_angle;
@@ -237,9 +235,7 @@ impl<T: ParticleMapAttributeGrad> ParticleMap<T> {
                 }
             }
 
-            if extreme_value.is_none() {
-                return None;
-            }
+            extreme_value?;
 
             range = (extreme_angle - step * 0.5, extreme_angle + step * 0.5);
             final_angle = extreme_angle;
