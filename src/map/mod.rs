@@ -9,10 +9,10 @@ pub mod lerp;
 pub mod network;
 pub mod rw;
 
-pub trait ParticleMapAttribute: Debug + Clone + PartialEq {}
-impl<T: Debug + Clone + PartialEq> ParticleMapAttribute for T {}
+pub trait ParticleMapAttribute: Clone + PartialEq {}
+impl<T: Clone + PartialEq> ParticleMapAttribute for T {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParticleMap<T: ParticleMapAttribute> {
     params: ParticleParameters,
     particles: HashMap<Particle, T>,
@@ -94,6 +94,11 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
     /// Get the value of the particle at the given site.
     pub fn get(&self, particle: &Particle) -> Option<&T> {
         self.particles.get(particle)
+    }
+
+    /// Check if the particle is in the map.
+    pub fn contains(&self, particle: &Particle) -> bool {
+        self.particles.contains_key(particle)
     }
 
     /// Get corner coordinates of the range of the registered particles.
