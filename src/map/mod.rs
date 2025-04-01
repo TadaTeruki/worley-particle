@@ -73,6 +73,10 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         self.particles.iter()
     }
 
+    pub fn into_iter(self) -> impl Iterator<Item = (Particle, T)> {
+        self.particles.into_iter()
+    }
+
     /// Returns an iterator that clones the keys and values.
     pub fn cloned_iter(&self) -> impl Iterator<Item = (Particle, T)> + '_ {
         self.particles.iter().map(|(k, v)| (*k, v.clone()))
