@@ -1,5 +1,5 @@
 use worley_particle::{
-    map::{lerp::InterpolationMethod, IDWStrategy, ParticleMap},
+    map::{algorithm::idw::IDWStrategy, lerp::InterpolationMethod, ParticleMap},
     Particle, ParticleParameters,
 };
 
