@@ -1,56 +1,96 @@
-// fn calculate_weight_area(
-//     &self,
-//     ptarget: &Point,
-//     edges: (usize, usize, usize),
-// ) -> Result<f64, InterpolatorError> {
-//     let point_prev = &self.points[self.triangles[edges.0]];
-//     let point_base = &self.points[self.triangles[edges.1]];
-//     let point_next = &self.points[self.triangles[edges.2]];
+use naturalneighbor::{Interpolator, Point};
 
-//     let mprev = &Point {
-//         x: (point_base.x + point_prev.x) / 2.,
-//         y: (point_base.y + point_prev.y) / 2.,
-//     };
-//     let mnext = &Point {
-//         x: (point_base.x + point_next.x) / 2.,
-//         y: (point_base.y + point_next.y) / 2.,
-//     };
+use crate::{
+    map::{ParticleMap, ParticleMapAttribute},
+    Particle, ParticleParameters,
+};
 
-//     let mut ce = edges.0;
+/// The strategy for the Natural Neighbor Interpolation (NNI).
+#[derive(Clone)]
+pub enum NNIStrategy {
+    Prebuilt {
+        interpolator: Interpolator,
+        particles: Vec<Particle>,
+    },
+    Immediate,
+}
 
-//     let pre = {
-//         let mut pre = 0.;
-//         let mut cs1 = mprev.clone();
-//         for dcount in 0..self.degree_limitation {
-//             let cit = ce / 3;
-//             let triangle = [
-//                 &self.points[self.triangles[cit * 3]],
-//                 &self.points[self.triangles[cit * 3 + 1]],
-//                 &self.points[self.triangles[cit * 3 + 2]],
-//             ];
-//             let c = circumcenter(&triangle);
-//             pre += (cs1.x - c.x) * (cs1.y + c.y);
-//             cs1 = c;
-//             let next = next_harfedge(ce);
-//             if edges.1 == next {
-//                 break;
-//             }
-//             ce = self.harfedges[next];
+impl NNIStrategy {
+    pub fn new_immediate() -> Self {
+        Self::Immediate
+    }
 
-//             if self.detect_too_large_degree(dcount) {
-//                 return Err(InterpolatorError::TooManyNeighbors(self.degree_limitation));
-//             }
-//         }
-//         pre + (cs1.x - mnext.x) * (cs1.y + mnext.y) + (mnext.x - mprev.x) * (mnext.y + mprev.y)
-//     };
+    pub fn new_prebuild<T: ParticleMapAttribute>(particle_map: &ParticleMap<T>) -> Self {
+        let particles = particle_map.particles.keys().cloned().collect::<Vec<_>>();
 
-//     let gprev = circumcenter(&[ptarget, point_base, point_prev]);
-//     let gnext = circumcenter(&[ptarget, point_base, point_next]);
+        let points = particles
+            .iter()
+            .map(|particle| {
+                let site = particle.site();
+                Point {
+                    x: site.0,
+                    y: site.1,
+                }
+            })
+            .collect::<Vec<_>>();
 
-//     let post = (mprev.x - gprev.x) * (mprev.y + gprev.y)
-//         + (gprev.x - gnext.x) * (gprev.y + gnext.y)
-//         + (gnext.x - mnext.x) * (gnext.y + mnext.y)
-//         + (mnext.x - mprev.x) * (mnext.y + mprev.y);
+        Self::Prebuilt {
+            interpolator: Interpolator::new(&points),
+            particles,
+        }
+    }
 
-//     Ok(pre - post)
-// }
+    /// Calculate the NNI weights of the particles around the given site.
+    pub fn calculate_nni_weights(
+        &self,
+        x: f64,
+        y: f64,
+        params: ParticleParameters,
+    ) -> Option<Vec<(Particle, f64)>> {
+        let particles = match self {
+            Self::Prebuilt { particles, .. } => particles,
+            Self::Immediate => &Particle::from_inside_radius(x, y, params, params.scale * 2.0),
+        };
+
+        let interpolator = match self {
+            Self::Prebuilt { interpolator, .. } => interpolator,
+            Self::Immediate => {
+                let points = particles
+                    .iter()
+                    .map(|particle| {
+                        let site = particle.site();
+                        Point {
+                            x: site.0,
+                            y: site.1,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                &Interpolator::new(&points)
+            }
+        };
+
+        let mut weights = interpolator
+            .query_weights(Point { x, y })
+            .ok()??
+            .iter()
+            .map(|(idx, weight)| (particles[*idx], *weight))
+            .collect::<Vec<_>>();
+
+        let sum = weights.iter().map(|(_, w)| w).sum::<f64>();
+
+        if sum == 0.0 {
+            return None;
+        }
+
+        for (_, w) in &mut weights {
+            *w /= sum;
+        }
+
+        if weights.is_empty() {
+            None
+        } else {
+            Some(weights)
+        }
+    }
+}

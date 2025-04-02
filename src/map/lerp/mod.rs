@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{Particle, ParticleParameters};
 
-use super::{IDWStrategy, ParticleMap, ParticleMapAttribute};
+use super::{IDWStrategy, NNIStrategy, ParticleMap, ParticleMapAttribute};
 
 pub mod vertorization;
 
@@ -24,6 +24,8 @@ pub enum InterpolationMethod {
     Nearest,
     IDW(IDWStrategy),
     IDWSeparated(IDWStrategy),
+    NNI(NNIStrategy),
+    NNISeparated(NNIStrategy),
 }
 
 impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
@@ -39,9 +41,64 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 let mut tmp_weight = 0.0;
 
                 for (particle, weight) in weights {
-                    let value = self.particles.get(&particle).unwrap();
+                    let value = if let Some(value) = self.particles.get(&particle) {
+                        value
+                    } else {
+                        continue;
+                    };
                     tmp_weight += weight;
 
+                    if let Some(total_value) = total_value.as_mut() {
+                        *total_value = total_value.lerp(value, weight / tmp_weight);
+                    } else {
+                        total_value = Some(value.clone());
+                    }
+                }
+
+                total_value
+            }
+            InterpolationMethod::NNI(strategy) => {
+                let weights = strategy.calculate_nni_weights(x, y, self.params)?;
+                let mut total_value: Option<T> = None;
+                let mut tmp_weight = 0.0;
+
+                for (particle, weight) in weights {
+                    let value = if let Some(value) = self.particles.get(&particle) {
+                        value
+                    } else {
+                        continue;
+                    };
+                    tmp_weight += weight;
+
+                    if let Some(total_value) = total_value.as_mut() {
+                        *total_value = total_value.lerp(value, weight / tmp_weight);
+                    } else {
+                        total_value = Some(value.clone());
+                    }
+                }
+
+                total_value
+            }
+            InterpolationMethod::NNISeparated(strategy) => {
+                let weights = strategy.calculate_nni_weights(x, y, self.params)?;
+                let self_particle = Particle::from(x, y, self.params);
+
+                let weight_sum = weights.iter().map(|(_, weight)| *weight).sum::<f64>();
+                let mut total_value: Option<T> = None;
+                let mut tmp_weight = 0.0;
+                for (particle, weight) in weights {
+                    let (value, weight) = if particle == self_particle {
+                        (
+                            self.particles.get(&particle).unwrap(),
+                            (weight / weight_sum - 0.5).max(0.0),
+                        )
+                    } else {
+                        (&T::default(), weight / weight_sum)
+                    };
+                    tmp_weight += weight;
+                    if tmp_weight <= 0.0 {
+                        continue;
+                    }
                     if let Some(total_value) = total_value.as_mut() {
                         *total_value = total_value.lerp(value, weight / tmp_weight);
                     } else {

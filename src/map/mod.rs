@@ -1,5 +1,6 @@
 use algorithm::disjoint_set::DisjointSet;
 use algorithm::idw::IDWStrategy;
+use algorithm::nni::NNIStrategy;
 
 use crate::{Particle, ParticleParameters};
 use std::{collections::HashMap, fmt::Debug};
