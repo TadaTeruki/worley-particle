@@ -34,7 +34,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 self.particles.get(&particle).cloned()
             }
             InterpolationMethod::IDW(strategy) => {
-                let weights = self.calculate_idw_weights(x, y, strategy)?;
+                let weights = strategy.calculate_idw_weights(x, y, self.params)?;
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
 
@@ -52,7 +52,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 total_value
             }
             InterpolationMethod::IDWSeparated(strategy) => {
-                let weights = self.calculate_idw_weights(x, y, strategy)?;
+                let weights = strategy.calculate_idw_weights(x, y, self.params)?;
                 let self_particle = Particle::from(x, y, self.params);
 
                 let weight_sum = weights.iter().map(|(_, weight)| *weight).sum::<f64>();

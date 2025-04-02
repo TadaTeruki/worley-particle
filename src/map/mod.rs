@@ -1,5 +1,5 @@
 use algorithm::disjoint_set::DisjointSet;
-use algorithm::idw::{calculate_idw_weights as idw_calculate_weights, IDWStrategy};
+use algorithm::idw::IDWStrategy;
 
 use crate::{Particle, ParticleParameters};
 use std::{collections::HashMap, fmt::Debug};
@@ -159,16 +159,6 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
             .collect();
 
         maps
-    }
-
-    /// Calculate the IDW weights of the particles around the given site.
-    pub fn calculate_idw_weights(
-        &self,
-        x: f64,
-        y: f64,
-        strategy: &IDWStrategy,
-    ) -> Option<Vec<(Particle, f64)>> {
-        idw_calculate_weights(self, x, y, strategy)
     }
 
     #[allow(dead_code)]
