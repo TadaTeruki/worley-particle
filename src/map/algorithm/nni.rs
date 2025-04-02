@@ -7,7 +7,12 @@ use crate::{
 
 /// The strategy for the Natural Neighbor Interpolation (NNI).
 #[derive(Clone)]
-pub enum NNIStrategy {
+pub struct NNIStrategy {
+    kind: NNIStrategyKind,
+}
+
+#[derive(Clone)]
+enum NNIStrategyKind {
     Prebuilt {
         interpolator: Interpolator,
         particles: Vec<Particle>,
@@ -17,7 +22,9 @@ pub enum NNIStrategy {
 
 impl NNIStrategy {
     pub fn new_immediate() -> Self {
-        Self::Immediate
+        Self {
+            kind: NNIStrategyKind::Immediate,
+        }
     }
 
     pub fn new_prebuild<T: ParticleMapAttribute>(particle_map: &ParticleMap<T>) -> Self {
@@ -34,9 +41,11 @@ impl NNIStrategy {
             })
             .collect::<Vec<_>>();
 
-        Self::Prebuilt {
-            interpolator: Interpolator::new(&points),
-            particles,
+        Self {
+            kind: NNIStrategyKind::Prebuilt {
+                interpolator: Interpolator::new(&points),
+                particles,
+            },
         }
     }
 
@@ -47,14 +56,16 @@ impl NNIStrategy {
         y: f64,
         params: ParticleParameters,
     ) -> Option<Vec<(Particle, f64)>> {
-        let particles = match self {
-            Self::Prebuilt { particles, .. } => particles,
-            Self::Immediate => &Particle::from_inside_radius(x, y, params, params.scale * 2.0),
+        let particles = match &self.kind {
+            NNIStrategyKind::Prebuilt { particles, .. } => particles,
+            NNIStrategyKind::Immediate => {
+                &Particle::from_inside_radius(x, y, params, params.scale * 2.0)
+            }
         };
 
-        let interpolator = match self {
-            Self::Prebuilt { interpolator, .. } => interpolator,
-            Self::Immediate => {
+        let interpolator = match &self.kind {
+            NNIStrategyKind::Prebuilt { interpolator, .. } => interpolator,
+            NNIStrategyKind::Immediate => {
                 let points = particles
                     .iter()
                     .map(|particle| {
