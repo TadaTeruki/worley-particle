@@ -47,10 +47,6 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         self.particles.iter()
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Particle, T)> {
-        self.particles.into_iter()
-    }
-
     /// Returns an iterator that clones the keys and values.
     pub fn cloned_iter(&self) -> impl Iterator<Item = (Particle, T)> + '_ {
         self.particles.iter().map(|(k, v)| (*k, v.clone()))
@@ -177,6 +173,15 @@ impl<T: ParticleMapAttribute> ParticleMap<T> {
         }
 
         true
+    }
+}
+
+impl<T: ParticleMapAttribute> IntoIterator for ParticleMap<T> {
+    type Item = (Particle, T);
+    type IntoIter = std::collections::hash_map::IntoIter<Particle, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.particles.into_iter()
     }
 }
 
