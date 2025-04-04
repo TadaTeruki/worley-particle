@@ -253,7 +253,7 @@ impl<T: ParticleMapAttributeGrad> ParticleMap<T> {
 mod tests {
     use super::super::lerp::InterpolationMethod;
     use super::*;
-    use crate::{map::IDWStrategy, Particle, ParticleParameters};
+    use crate::{map::algorithm::interp::idw::IDWStrategy, Particle, ParticleParameters};
     use std::collections::HashMap;
 
     /// Helper struct for gradient test cases

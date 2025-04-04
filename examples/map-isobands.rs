@@ -1,7 +1,7 @@
 use tiny_skia::{Paint, PathBuilder, Pixmap, Stroke, Transform};
 use worley_particle::{
     map::{
-        algorithm::idw::IDWStrategy,
+        algorithm::interp::idw::IDWStrategy,
         lerp::{vertorization::Band, InterpolationMethod},
         ParticleMap,
     },

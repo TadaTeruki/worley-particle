@@ -5,6 +5,8 @@ use crate::{
     Particle, ParticleParameters,
 };
 
+use super::InterpolationStrategy;
+
 /// The strategy for the Natural Neighbor Interpolation (NNI).
 #[derive(Clone)]
 pub struct NNIStrategy {
@@ -48,9 +50,10 @@ impl NNIStrategy {
             },
         }
     }
+}
 
-    /// Calculate the NNI weights of the particles around the given site.
-    pub fn calculate_nni_weights(
+impl InterpolationStrategy for NNIStrategy {
+    fn calculate_weights(
         &self,
         x: f64,
         y: f64,

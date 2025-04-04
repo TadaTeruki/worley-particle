@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use crate::{Particle, ParticleParameters};
 
-use super::{IDWStrategy, NNIStrategy, ParticleMap, ParticleMapAttribute};
+use super::{
+    algorithm::interp::{idw::IDWStrategy, nni::NNIStrategy, InterpolationStrategy},
+    ParticleMap, ParticleMapAttribute,
+};
 
 pub mod vertorization;
 
@@ -25,7 +28,6 @@ pub enum InterpolationMethod {
     IDW(IDWStrategy),
     IDWSeparated(IDWStrategy),
     NNI(NNIStrategy),
-    NNISeparated(NNIStrategy),
 }
 
 impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
@@ -36,7 +38,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 self.particles.get(&particle).cloned()
             }
             InterpolationMethod::IDW(strategy) => {
-                let weights = strategy.calculate_idw_weights(x, y, self.params)?;
+                let weights = strategy.calculate_weights(x, y, self.params)?;
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
 
@@ -58,7 +60,7 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
                 total_value
             }
             InterpolationMethod::NNI(strategy) => {
-                let weights = strategy.calculate_nni_weights(x, y, self.params)?;
+                let weights = strategy.calculate_weights(x, y, self.params)?;
                 let mut total_value: Option<T> = None;
                 let mut tmp_weight = 0.0;
 
@@ -79,37 +81,8 @@ impl<T: ParticleMapAttributeLerp> ParticleMap<T> {
 
                 total_value
             }
-            InterpolationMethod::NNISeparated(strategy) => {
-                let weights = strategy.calculate_nni_weights(x, y, self.params)?;
-                let self_particle = Particle::from(x, y, self.params);
-
-                let weight_sum = weights.iter().map(|(_, weight)| *weight).sum::<f64>();
-                let mut total_value: Option<T> = None;
-                let mut tmp_weight = 0.0;
-                for (particle, weight) in weights {
-                    let (value, weight) = if particle == self_particle {
-                        (
-                            self.particles.get(&particle).unwrap(),
-                            (weight / weight_sum - 0.5).max(0.0),
-                        )
-                    } else {
-                        (&T::default(), weight / weight_sum)
-                    };
-                    tmp_weight += weight;
-                    if tmp_weight <= 0.0 {
-                        continue;
-                    }
-                    if let Some(total_value) = total_value.as_mut() {
-                        *total_value = total_value.lerp(value, weight / tmp_weight);
-                    } else {
-                        total_value = Some(value.clone());
-                    }
-                }
-
-                total_value
-            }
             InterpolationMethod::IDWSeparated(strategy) => {
-                let weights = strategy.calculate_idw_weights(x, y, self.params)?;
+                let weights = strategy.calculate_weights(x, y, self.params)?;
                 let self_particle = Particle::from(x, y, self.params);
 
                 let weight_sum = weights.iter().map(|(_, weight)| *weight).sum::<f64>();

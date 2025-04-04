@@ -1,5 +1,7 @@
 use crate::{Particle, ParticleParameters};
 
+use super::InterpolationStrategy;
+
 /// The strategy for the Inverse Distance Weighting (IDW) interpolation.
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct IDWStrategy {
@@ -43,9 +45,10 @@ impl IDWStrategy {
 
         IDWWeight::Inside(weight)
     }
+}
 
-    /// Calculate the IDW weights of the particles around the given site.
-    pub fn calculate_idw_weights(
+impl InterpolationStrategy for IDWStrategy {
+    fn calculate_weights(
         &self,
         x: f64,
         y: f64,
