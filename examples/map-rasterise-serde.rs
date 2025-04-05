@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path};
 
-use serde_crate::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use worley_particle::{
     map::{algorithm::interp::idw::IDWStrategy, lerp::InterpolationMethod, ParticleMap},
     Particle, ParticleParameters,
