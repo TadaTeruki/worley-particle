@@ -1,9 +1,7 @@
 use std::{collections::HashMap, error::Error, io::Write};
 
-use base64::{prelude::BASE64_STANDARD, Engine};
 use particlemap::items::{MsgParticle, MsgParticleMap, MsgParticleParameters};
 use prost::Message;
-use serde_crate::{Deserialize, Serialize};
 
 use crate::{Particle, ParticleParameters};
 
@@ -186,30 +184,38 @@ impl<T: ParticleMapAttributeRW> ParticleMap<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<T: ParticleMapAttributeRW> Serialize for ParticleMap<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde_crate::Serializer,
-    {
-        let bytes = self
-            .write_to_bytes()
-            .map_err(serde_crate::ser::Error::custom)?;
-        let base64 = BASE64_STANDARD.encode(&bytes);
-        serializer.serialize_str(&base64)
-    }
-}
+mod serde {
+    use base64::{prelude::BASE64_STANDARD, Engine};
+    use serde_crate::{Deserialize, Serialize};
 
-#[cfg(feature = "serde")]
-impl<'de, T: ParticleMapAttributeRW> Deserialize<'de> for ParticleMap<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde_crate::Deserializer<'de>,
-    {
-        let base64 = String::deserialize(deserializer)?;
-        let bytes = BASE64_STANDARD
-            .decode(base64)
-            .map_err(serde_crate::de::Error::custom)?;
-        Self::read_from_bytes(bytes).map_err(serde_crate::de::Error::custom)
+    use crate::map::ParticleMap;
+
+    use super::ParticleMapAttributeRW;
+
+    impl<T: ParticleMapAttributeRW> Serialize for ParticleMap<T> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde_crate::Serializer,
+        {
+            let bytes = self
+                .write_to_bytes()
+                .map_err(serde_crate::ser::Error::custom)?;
+            let base64 = BASE64_STANDARD.encode(&bytes);
+            serializer.serialize_str(&base64)
+        }
+    }
+
+    impl<'de, T: ParticleMapAttributeRW> Deserialize<'de> for ParticleMap<T> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde_crate::Deserializer<'de>,
+        {
+            let base64 = String::deserialize(deserializer)?;
+            let bytes = BASE64_STANDARD
+                .decode(base64)
+                .map_err(serde_crate::de::Error::custom)?;
+            Self::read_from_bytes(bytes).map_err(serde_crate::de::Error::custom)
+        }
     }
 }
 
