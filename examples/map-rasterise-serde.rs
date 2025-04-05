@@ -34,7 +34,6 @@ fn create_map(params: ParticleParameters) -> ParticleMap<f64> {
     ParticleMap::new(params, cells.into_iter().zip(values).collect())
 }
 
-#[cfg(feature = "serde")]
 fn main() {
     let params = ParticleParameters::new(0.8, 0.8, 0.5, 0).unwrap();
 
