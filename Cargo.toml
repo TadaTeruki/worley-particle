@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-serialize = [ "serde", "serde_json", "base64" ]
+serialize = [ "serde", "base64" ]
 
 [dependencies]
 contour = "0.13.1"
@@ -13,15 +13,13 @@ naturalneighbor = "1.2.2"
 rand = "0.8.5"
 thiserror = "2.0.9"
 serde = { version = "1", optional = true }
-serde_json = { version = "1.0.140", optional = true }
 base64 = { version = "0.22.1", optional = true }
 
 [dev-dependencies]
 image = "0.25.5"
 tiny-skia = "0.11.4"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.140"
-base64 = "0.22.1"
+serde_cbor = "0.11.2"
 
 [build-dependencies]
 prost-build = "0.13.4"

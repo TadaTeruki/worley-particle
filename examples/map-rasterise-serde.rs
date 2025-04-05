@@ -14,12 +14,12 @@ pub fn load_or_create<P: AsRef<Path>, T: Serialize + DeserializeOwned>(
 
     if path.exists() {
         let file = File::open(path)?;
-        let data: T = serde_json::from_reader(file)?;
+        let data: T = serde_cbor::from_reader(file)?;
         Ok(data)
     } else {
         let data = create_fn();
         let file = File::create(path)?;
-        serde_json::to_writer(file, &data)?;
+        serde_cbor::to_writer(file, &data)?;
         Ok(data)
     }
 }
